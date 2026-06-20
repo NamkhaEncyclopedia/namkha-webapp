@@ -1,0 +1,20 @@
+:root { font-family: system-ui, sans-serif; }
+
+body { margin: 0; background: #f4f4f4; color: #222; }
+main { max-width: 900px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 1.5rem; }
+
+form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; }
+form label { display: flex; flex-direction: column; font-size: 0.85rem; gap: 4px; }
+form input, form select { padding: 6px 8px; font-size: 0.95rem; }
+form button { grid-column: 1 / -1; padding: 10px; font-size: 1rem; cursor: pointer; }
+
+#result { margin-top: 24px; }
+.sheet { background: #fff; border: 1px solid #ddd; overflow: auto; }
+.sheet svg { display: block; max-width: 100%; height: auto; }
+
+.error { color: #c62828; font-weight: bold; }
+.hint { font-size: 0.85rem; color: #555; }
+
+form[action="/download.pdf"] { display: block; margin-top: 12px; }
+form[action="/download.pdf"] button { width: auto; padding: 8px 16px; }

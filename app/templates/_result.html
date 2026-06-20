@@ -1,0 +1,10 @@
+{% if error %}
+  <p class="error">{{ error }}</p>
+{% else %}
+  <div class="sheet">{{ svg | safe }}</div>
+
+  <form method="post" action="/download.pdf">
+    {% for key, value in form.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <button type="submit">Download PDF</button>
+  </form>
+{% endif %}

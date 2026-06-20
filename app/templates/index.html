@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Namkha Calculator</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Namkha Calculator</h1>
+
+    <form hx-post="/calculate" hx-target="#result" hx-swap="innerHTML">
+      <label>Name
+        <input type="text" name="name" placeholder="optional">
+      </label>
+
+      <label>Gender
+        <select name="gender">
+          {% for value, text in genders %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+        </select>
+      </label>
+
+      <label>Birth date
+        <input type="date" name="birth_date" value="1985-03-15" required>
+      </label>
+
+      <label>Birth time
+        <input type="time" name="birth_time" value="14:30" required>
+      </label>
+
+      <label>Timezone
+        <select name="timezone">
+          {% for tz in timezones %}<option value="{{ tz }}"{% if tz == "Europe/Berlin" %} selected{% endif %}>{{ tz }}</option>{% endfor %}
+        </select>
+      </label>
+
+      <label>Latitude
+        <input type="number" name="latitude" step="any" value="52.52" required>
+      </label>
+
+      <label>Longitude
+        <input type="number" name="longitude" step="any" value="13.40" required>
+      </label>
+
+      <label>Namkha type
+        <select name="namkha_type">
+          {% for value, text in namkha_types %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+        </select>
+      </label>
+
+      <label>Method
+        <select name="method">
+          {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+        </select>
+      </label>
+
+      <button type="submit">Calculate</button>
+    </form>
+
+    <section id="result"></section>
+  </main>
+</body>
+</html>

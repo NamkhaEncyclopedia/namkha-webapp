@@ -1,0 +1,25 @@
+[project]
+name = "namkha-webapp"
+version = "0.1.0"
+description = "Web app to calculate a Namkha and organize results in a downloadable calculation sheet"
+authors = [{ name = "Namkha Encyclopedia" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = [
+    "namkha-calculator (>=0.1.0a3)",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
+    "lxml>=5.2",
+    "typst>=0.14",
+    "pytz>=2025.2",
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"

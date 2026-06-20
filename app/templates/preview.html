@@ -1,0 +1,17 @@
+<!-- TODO: remove before release -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Editing loop: reload every 2s so saved illustration.svg edits show up. -->
+  <meta http-equiv="refresh" content="2">
+  <title>Sheet preview</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <p class="hint">Preview with sample data — edit <code>sheet.typ</code> / <code>illustration.svg</code> and save.</p>
+    <div class="sheet">{{ svg | safe }}</div>
+  </main>
+</body>
+</html>
