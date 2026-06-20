@@ -30,6 +30,9 @@ SVG_NS = "http://www.w3.org/2000/svg"
 _SVG_PATH_NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?")
 _SVG_PATH_COMMAND_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)")
 
+_SVG_DANGEROUS_TAGS = (f"{{{SVG_NS}}}script", f"{{{SVG_NS}}}foreignObject")
+_SVG_LINK_ATTRIBUTES = ("href", f"{{http://www.w3.org/1999/xlink}}href")
+
 # Aspect rendering order and human labels (Typst draws the table text).
 ASPECTS = (
     (nc.Aspect.LIFE, "Life"),
@@ -45,7 +48,7 @@ ASPECTS = (
 
 def _element_color(element: nc.Element, mewa: int | None = None) -> str:
     """Element hex color, with the deep-water (mewa=2) override."""
-    if element is nc.Element.WATER and mewa == 2:
+    if element == nc.Element.WATER and mewa == 2:
         return constants.MEWA_TWO_COLOR
     return constants.ELEMENT_COLORS[element]
 
@@ -87,13 +90,13 @@ def _diamond_geometry(path) -> tuple[float, float, float, float]:
                     emit(numbers[index], numbers[index + 1])
                     index += 2
             case "H":
-                for next_x in numbers:
-                    x = x + next_x if relative else next_x
+                for value in numbers:
+                    x = x + value if relative else value
                     xs.append(x)
                     ys.append(y)
             case "V":
-                for next_y in numbers:
-                    y = y + next_y if relative else next_y
+                for value in numbers:
+                    y = y + value if relative else value
                     xs.append(x)
                     ys.append(y)
             case "C":
@@ -164,7 +167,7 @@ def _set_label(root, label_id: str, text: str) -> None:
 # Rhombus position -> aspect, and the side labels. The two side rhombi (and their
 # mewas) swap Capacity/Fortune by gender: male = Capacity left/Fortune right.
 def _layout(gender) -> tuple[dict, dict]:
-    capacity_left = gender is nc.Gender.MALE
+    capacity_left = gender == nc.Gender.MALE
     left, right = (
         (nc.Aspect.CAPACITY, nc.Aspect.FORTUNE)
         if capacity_left
@@ -206,7 +209,7 @@ def _band_colors(aspect, harmonized_aspect, mewa: int | None) -> list[str]:
     with the center color prepended."""
     center_color = _element_color(harmonized_aspect.center, mewa)
     sequence = [_element_color(e) for e in harmonized_aspect.harmonization_seq]
-    if aspect is nc.Aspect.LIFE:
+    if aspect == nc.Aspect.LIFE:
         return sequence + [center_color] + sequence + [center_color] + sequence
     return sequence
 
@@ -258,13 +261,13 @@ def _build_data(result, request) -> dict:
     aspects = []
     for aspect, label in ASPECTS:
         harmonized_aspect = next(
-            h for h in result.harmonized_aspects if h.name is aspect
+            h for h in result.harmonized_aspects if h.name == aspect
         )
         mewa = result.mewa_numbers.get(aspect)
         tibetan, transcription = constants.ELEMENT_SYLLABLES[harmonized_aspect.center]
         center_color = (
             constants.MEWA_TWO_COLOR_NAME
-            if harmonized_aspect.center is nc.Element.WATER and mewa == 2
+            if harmonized_aspect.center == nc.Element.WATER and mewa == 2
             else constants.ELEMENT_COLOR_NAMES[harmonized_aspect.center]
         )
         aspects.append(
@@ -335,9 +338,6 @@ def render_pdf(result, request) -> bytes:
             format="pdf",
         )
 
-
-_SVG_DANGEROUS_TAGS = (f"{{{SVG_NS}}}script", f"{{{SVG_NS}}}foreignObject")
-_SVG_LINK_ATTRIBUTES = ("href", f"{{http://www.w3.org/1999/xlink}}href")
 
 
 def _sanitize_svg(svg: bytes) -> bytes:
