@@ -1,6 +1,7 @@
 """Write sample data.json + namkha.svg into templates/, then compile sheet.typ.
 
-Run after any change to rendering code (Python render pipeline, sheet.typ, illustration.svg):
+Run after any change to rendering code
+(Python render pipeline, sheet.typ, illustration.svg):
 
     poetry run python gen_preview_data.py
 
@@ -18,8 +19,7 @@ import namkha_calculator as nc
 import typst
 
 from app import constants
-from app.calculation_render import (FONTS, TEMPLATES, _build_data,
-                                    fill_illustration)
+from app.calculation_render import FONTS, TEMPLATES, _build_data, fill_illustration
 
 
 class _SampleRequest:

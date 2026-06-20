@@ -2,8 +2,9 @@
 
 Pipeline: color the blank namkha illustration (illustration.svg) by id into
 namkha.svg, dump the text data to JSON, then compile sheet.typ with Typst to PDF
-(download) or SVG (inline). Typst responsible for the page + table text; the SVG has the colored
-Namkha graphic and its own labels. One source, so the inline view matches the download.
+(download) or SVG (inline). Typst responsible for the page + table text; the SVG
+has the colored Namkha graphic and its own labels. One source, so the inline view
+matches the download.
 Typst uses `resvg` to render SVGs, it has some quirks explained in the docstrings below.
 """
 
@@ -31,7 +32,7 @@ _SVG_PATH_NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?"
 _SVG_PATH_COMMAND_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)")
 
 _SVG_DANGEROUS_TAGS = (f"{{{SVG_NS}}}script", f"{{{SVG_NS}}}foreignObject")
-_SVG_LINK_ATTRIBUTES = ("href", f"{{http://www.w3.org/1999/xlink}}href")
+_SVG_LINK_ATTRIBUTES = ("href", "{http://www.w3.org/1999/xlink}href")
 
 # Aspect rendering order and human labels (Typst draws the table text).
 ASPECTS = (
@@ -54,9 +55,8 @@ def _element_color(element: nc.Element, mewa: int | None = None) -> str:
 
 
 def _by_id(root, node_id: str):
-    found = root.xpath(f"//*[@id=$i]", i=node_id)
+    found = root.xpath("//*[@id=$i]", i=node_id)
     return found[0] if found else None
-
 
 
 def _diamond_geometry(path) -> tuple[float, float, float, float]:
@@ -66,28 +66,29 @@ def _diamond_geometry(path) -> tuple[float, float, float, float]:
     x = y = sx = sy = 0.0
     xs: list[float] = []
     ys: list[float] = []
+
+    def emit(next_x, next_y, relative):
+        nonlocal x, y
+        x = x + next_x if relative else next_x
+        y = y + next_y if relative else next_y
+        xs.append(x)
+        ys.append(y)
+
     for command, argument in _SVG_PATH_COMMAND_RE.findall(path.get("d", "")):
         numbers = [float(n) for n in _SVG_PATH_NUMBER_RE.findall(argument)]
         relative, command_type, index = command.islower(), command.upper(), 0
-
-        def emit(next_x, next_y):
-            nonlocal x, y
-            x = x + next_x if relative else next_x
-            y = y + next_y if relative else next_y
-            xs.append(x)
-            ys.append(y)
 
         match command_type:
             case "M":
                 first = True
                 while index + 1 < len(numbers):
-                    emit(numbers[index], numbers[index + 1])
+                    emit(numbers[index], numbers[index + 1], relative)
                     if first:
                         sx, sy, first = x, y, False
                     index += 2
             case "L" | "T":
                 while index + 1 < len(numbers):
-                    emit(numbers[index], numbers[index + 1])
+                    emit(numbers[index], numbers[index + 1], relative)
                     index += 2
             case "H":
                 for value in numbers:
@@ -101,15 +102,15 @@ def _diamond_geometry(path) -> tuple[float, float, float, float]:
                     ys.append(y)
             case "C":
                 while index + 5 < len(numbers):
-                    emit(numbers[index + 4], numbers[index + 5])
+                    emit(numbers[index + 4], numbers[index + 5], relative)
                     index += 6
             case "S" | "Q":
                 while index + 3 < len(numbers):
-                    emit(numbers[index + 2], numbers[index + 3])
+                    emit(numbers[index + 2], numbers[index + 3], relative)
                     index += 4
             case "A":
                 while index + 6 < len(numbers):
-                    emit(numbers[index + 5], numbers[index + 6])
+                    emit(numbers[index + 5], numbers[index + 6], relative)
                     index += 7
             case "Z":
                 x, y = sx, sy
@@ -288,11 +289,15 @@ def _build_data(result, request) -> dict:
                 "conflicted": bool(harmonized_aspect.is_conflicted),
             }
         )
+    birth_text = (
+        f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
+        f"{subject.birth_timezone} {_utc_offset(subject)}"
+    )
     return {
         "subject": {
             "name": subject.name or "—",
             "gender": subject.gender.name.title(),
-            "birth": f"{subject.birth_datetime:%Y-%m-%d %H:%M} {subject.birth_timezone} {_utc_offset(subject)}",
+            "birth": birth_text,
             "location": location_text,
         },
         "meta": {
@@ -337,7 +342,6 @@ def render_pdf(result, request) -> bytes:
             font_paths=[str(FONTS)],
             format="pdf",
         )
-
 
 
 def _sanitize_svg(svg: bytes) -> bytes:

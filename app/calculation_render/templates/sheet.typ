@@ -11,10 +11,15 @@
   paper: "a4",
   margin: (x: 1.5cm, top: 1.5cm, bottom: 1.8cm),
   footer: context {
-    let name-suffix = if data.subject.name != "—" { ": " + data.subject.name } else { "" }
+    let name-suffix = if data.subject.name != "—" {
+      ": " + data.subject.name
+    } else { "" }
     let title = data.meta.type + " Namkha Calculation" + name-suffix
     set text(size: 8pt, fill: rgb("#666666"))
-    align(center, [#title | namkha-calculator #data.meta.version | Page #counter(page).display() of #counter(page).final().first()])
+    align(
+      center,
+      [#title | namkha-calculator #data.meta.version | Page #counter(page).display() of #counter(page).final().first()],
+    )
   },
 )
 #set text(size: 12pt, font: "Inclusive Sans")
@@ -27,7 +32,11 @@
   column-gutter: 8pt,
   align: horizon,
   image("logo.svg", height: 28pt),
-  text(18pt, weight: "bold", font: "Alegreya SC")[#data.meta.type Namkha Calculation],
+  text(
+    18pt,
+    weight: "bold",
+    font: "Alegreya SC",
+  )[#data.meta.type Namkha Calculation],
 )
 #v(4pt)
 #line(length: 100%, stroke: 0.5pt)
@@ -59,7 +68,16 @@
   columns: (auto, auto, auto, auto, auto, auto, 1fr, auto),
   inset: 6pt,
   align: (x, y) => {
-    let horizontal_alignment = (left, center, center, left, center, left, left, center).at(x)
+    let horizontal_alignment = (
+      left,
+      center,
+      center,
+      left,
+      center,
+      left,
+      left,
+      center,
+    ).at(x)
     if y == 0 { horizontal_alignment } else { horizontal_alignment + horizon }
   },
   fill: (x, y) => if y == 0 {
@@ -71,29 +89,50 @@
     let outer = 1pt + black
     let inner = 0.5pt + rgb("#666666")
     (
-      left:   if x == 0 or x == 1 { outer } else { inner },
-      right:  if x == 0 or x == 7 { outer } else { inner },
-      top:    if y == 0 or y == 1 { outer } else { inner },
+      left: if x == 0 or x == 1 { outer } else { inner },
+      right: if x == 0 or x == 7 { outer } else { inner },
+      top: if y == 0 or y == 1 { outer } else { inner },
       bottom: if y == 0 or y == 8 { outer } else { inner },
     )
   },
   table.header(
-    [*Aspect*], [*Element*], [*Mewa \ No.*], [*Syllable \ colour*], [*Syllable*],
-    [*Center \ colour*], [*Harmonization \ sequence*], [*Conf- \ lict*],
+    [*Aspect*],
+    [*Element*],
+    [*Mewa \ No.*],
+    [*Syllable \ colour*],
+    [*Syllable*],
+    [*Center \ colour*],
+    [*Harmonization \ sequence*],
+    [*Conf- \ lict*],
   ),
-  ..data.aspects.map(aspect => (
-    text(weight: "bold", style: "italic")[#aspect.label],
-    [#aspect.element],
-    if aspect.mewa == none [—] else [#aspect.mewa],
-    [#aspect.syllable_color],
-    stack(dir: ttb, spacing: 2pt,
-      text(size: 22pt, font: "Noto Serif Tibetan", top-edge: "bounds", bottom-edge: "baseline")[#aspect.syllable_tibetan],
-      text(size: 9pt)[#aspect.syllable_roman],
-    ),
-    [#aspect.center_color],
-    if aspect.label == "Life" [#aspect.sequence #text(fill: rgb("#666666"))[ ⛌ 3]] else [#aspect.sequence],
-    if aspect.label == "Life" [–] else if aspect.conflicted [#text(size: 12pt, fill: rgb("#C0392B"))[●]] else [],
-  )).flatten()
+  ..data
+    .aspects
+    .map(aspect => (
+      text(weight: "bold", style: "italic")[#aspect.label],
+      [#aspect.element],
+      if aspect.mewa == none [—] else [#aspect.mewa],
+      [#aspect.syllable_color],
+      stack(
+        dir: ttb,
+        spacing: 2pt,
+        text(
+          size: 22pt,
+          font: "Noto Serif Tibetan",
+          top-edge: "bounds",
+          bottom-edge: "baseline",
+        )[#aspect.syllable_tibetan],
+        text(size: 9pt)[#aspect.syllable_roman],
+      ),
+      [#aspect.center_color],
+      if aspect.label == "Life" [#aspect.sequence #text(
+          fill: rgb("#666666"),
+        )[ ⛌ 3]] else [#aspect.sequence],
+      if aspect.label == "Life" [–] else if aspect.conflicted [#text(
+        size: 12pt,
+        fill: rgb("#C0392B"),
+      )[●]] else [],
+    ))
+    .flatten(),
 )
 
 #pagebreak()
