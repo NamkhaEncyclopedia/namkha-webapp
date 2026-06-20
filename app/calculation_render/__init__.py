@@ -26,6 +26,9 @@ TYP_TEMPLATE = TEMPLATES / "sheet.typ"
 
 SVG_NS = "http://www.w3.org/2000/svg"
 
+_SVG_PATH_NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?")
+_SVG_PATH_COMMAND_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)")
+
 # Aspect rendering order and human labels (Typst draws the table text).
 ASPECTS = (
     (nc.Aspect.LIFE, "Life"),
@@ -50,9 +53,6 @@ def _by_id(root, node_id: str):
     found = root.xpath(f"//*[@id=$i]", i=node_id)
     return found[0] if found else None
 
-
-_SVG_PATH_NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?")
-_SVG_PATH_COMMAND_RE = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])([^MmLlHhVvCcSsQqTtAaZz]*)")
 
 
 def _diamond_geometry(path) -> tuple[float, float, float, float]:
@@ -335,9 +335,39 @@ def render_pdf(result, request) -> bytes:
     return _compile(result, request, "pdf")
 
 
+_SVG_DANGEROUS_TAGS = (f"{{{SVG_NS}}}script", f"{{{SVG_NS}}}foreignObject")
+_SVG_LINK_ATTRIBUTES = ("href", f"{{http://www.w3.org/1999/xlink}}href")
+
+
+def _sanitize_svg(svg: bytes) -> bytes:
+    """Strip script/foreignObject elements, event-handler attributes, and
+    javascript: links from a Typst-rendered SVG page before it is embedded
+    as raw HTML (`| safe`) in the result template. Typst's own SVG export is
+    trusted, but this is a defense-in-depth backstop against future template
+    or library changes that could let request-controlled text reach markup."""
+    root = etree.fromstring(svg)
+    for tag in _SVG_DANGEROUS_TAGS:
+        for element in list(root.iter(tag)):
+            element.getparent().remove(element)
+    for element in root.iter():
+        for attribute in list(element.attrib):
+            local_name = etree.QName(attribute).localname
+            if local_name.lower().startswith("on"):
+                del element.attrib[attribute]
+        for attribute in _SVG_LINK_ATTRIBUTES:
+            value = element.get(attribute)
+            if value and value.strip().lower().startswith("javascript:"):
+                del element.attrib[attribute]
+    return etree.tostring(root)
+
+
 def render_svg(result, request) -> str:
     """Inline view. Typst returns single bytes for a one-page sheet, a list of
-    per-page bytes otherwise; stack each page's SVG so nothing is truncated."""
+    per-page bytes otherwise; stack each page's SVG so nothing is truncated.
+    Each page is sanitized before embedding, since the result template marks
+    this output `| safe` (raw HTML)."""
     out = _compile(result, request, "svg")
     pages = out if isinstance(out, list) else [out]
-    return "\n".join(f'<div class="page">{p.decode("utf-8")}</div>' for p in pages)
+    return "\n".join(
+        f'<div class="page">{_sanitize_svg(p).decode("utf-8")}</div>' for p in pages
+    )
