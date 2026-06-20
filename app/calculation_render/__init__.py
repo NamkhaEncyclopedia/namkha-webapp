@@ -11,6 +11,7 @@ import importlib.metadata
 import json
 import re
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import namkha_calculator as nc
@@ -306,13 +307,11 @@ def _build_data(result, request) -> dict:
     }
 
 
-def _compile(result, request, output_format: str):
-    """Fill SVG + data into a per-request tmpdir, compile sheet.typ with Typst.
-
-    image()/json() resolve relative to the .typ file, so the template, data,
-    and illustration all live together in the tmpdir.
-    Returns PDF bytes, or a list of per-page SVG/PNG byte strings.
-    """
+@contextmanager
+def _compile_tmpdir(result, request):
+    """Fill SVG + data into a per-request tmpdir holding sheet.typ, ready to
+    compile. image()/json() resolve relative to the .typ file, so the
+    template, data, and illustration all live together here."""
     svg = fill_illustration(result, request)
     data = _build_data(result, request)
     with tempfile.TemporaryDirectory() as tmp:
@@ -323,16 +322,18 @@ def _compile(result, request, output_format: str):
         (tmpdir / "sheet.typ").write_text(
             TYP_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8"
         )
+        yield tmpdir
+
+
+def render_pdf(result, request) -> bytes:
+    """Typst always returns single `bytes` for PDF, regardless of page count."""
+    with _compile_tmpdir(result, request) as tmpdir:
         return typst.compile(
             str(tmpdir / "sheet.typ"),
             root=str(tmpdir),
             font_paths=[str(FONTS)],
-            format=output_format,
+            format="pdf",
         )
-
-
-def render_pdf(result, request) -> bytes:
-    return _compile(result, request, "pdf")
 
 
 _SVG_DANGEROUS_TAGS = (f"{{{SVG_NS}}}script", f"{{{SVG_NS}}}foreignObject")
@@ -363,10 +364,16 @@ def _sanitize_svg(svg: bytes) -> bytes:
 
 def render_svg(result, request) -> str:
     """Inline view. Typst returns single bytes for a one-page sheet, a list of
-    per-page bytes otherwise; stack each page's SVG so nothing is truncated.
-    Each page is sanitized before embedding, since the result template marks
-    this output `| safe` (raw HTML)."""
-    out = _compile(result, request, "svg")
+    per-page bytes otherwise; normalized to a list here so every page is
+    stacked and nothing is truncated. Each page is sanitized before
+    embedding, since the result template marks this output `| safe` (raw HTML)."""
+    with _compile_tmpdir(result, request) as tmpdir:
+        out = typst.compile(
+            str(tmpdir / "sheet.typ"),
+            root=str(tmpdir),
+            font_paths=[str(FONTS)],
+            format="svg",
+        )
     pages = out if isinstance(out, list) else [out]
     return "\n".join(
         f'<div class="page">{_sanitize_svg(p).decode("utf-8")}</div>' for p in pages
