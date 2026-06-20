@@ -58,7 +58,11 @@ GENDERS = [(gender.name, gender.name.title()) for gender in nc.Gender]
 NAMKHA_TYPES = [
     (namkha_type.name, namkha_type.name.title()) for namkha_type in nc.NamkhaType
 ]
-METHODS = [(method.name, method.name) for method in nc.CalculationMethod]
+METHOD_LABELS = {"CLASSIC": "Classic", "CNNR": "CNNR"}
+METHODS = [
+    (method.name, METHOD_LABELS.get(method.name, method.name.title()))
+    for method in nc.CalculationMethod
+]
 TIMEZONES = pytz.common_timezones
 
 # TODO: remove before release

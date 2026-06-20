@@ -6,60 +6,275 @@
   <title>Namkha Calculator</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js"></script>
+  <script defer src="/static/alpine.min.js"></script>
 </head>
 <body>
-  <main>
-    <h1>Namkha Calculator</h1>
+  <header>
+    <a href="#"><img class="logo" src="/static/img/logo.svg" alt="Namkha Encyclopedia"></a>
+    <nav>
+      <ul>
+        <li><a href="#calculator">Calculator</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="https://github.com/NamkhaEncyclopedia" target="_blank" rel="noopener">Source Code</a></li>
+      </ul>
+    </nav>
+  </header>
 
-    <form hx-post="/calculate" hx-target="#result" hx-swap="innerHTML">
-      <label>Name
-        <input type="text" name="name" placeholder="optional">
-      </label>
+  <div class="container">
+    <h1 class="title" id="calculator">Namkha Calculator</h1>
 
-      <label>Gender
-        <select name="gender">
-          {% for value, text in genders %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-        </select>
-      </label>
+    <section class="application">
+      <div class="form-container">
+        <form
+          hx-post="/calculate"
+          hx-target="#result"
+          hx-swap="innerHTML"
+          x-data="namkhaForm()"
+          x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
+        >
+          <div class="form-mains">
+            <div>
+              <label for="method" class="label-major">Calculation method:</label>
+              <select id="method" name="method" class="input-text" x-model="method" required>
+                {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+              </select>
+            </div>
 
-      <label>Birth date
-        <input type="date" name="birth_date" value="1985-03-15" required>
-      </label>
+            <div>
+              <label for="name" class="label-major">Name (optional):</label>
+              <input type="text" id="name" name="name" class="input-text" placeholder="optional" x-ref="name">
+            </div>
 
-      <label>Birth time
-        <input type="time" name="birth_time" value="14:30" required>
-      </label>
+            <div>
+              <label class="label-major">Namkha type:</label>
+              <div class="radio-toggle">
+                {% for value, text in namkha_types %}
+                <div class="radio-button">
+                  <input
+                    type="radio"
+                    id="type-{{ value }}"
+                    name="namkha_type"
+                    value="{{ value }}"
+                    x-model="namkhaType"
+                    :disabled="method === 'CNNR' && '{{ value }}' !== 'YEAR'"
+                    {% if value == 'YEAR' %}checked{% endif %}
+                    required
+                  >
+                  <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
 
-      <label>Timezone
-        <select name="timezone">
-          {% for tz in timezones %}<option value="{{ tz }}"{% if tz == "Europe/Berlin" %} selected{% endif %}>{{ tz }}</option>{% endfor %}
-        </select>
-      </label>
+          <div class="namkha-data-by-type">
+            <div>
+              <label class="label-major">Gender:</label>
+              <div class="radio-toggle">
+                {% for value, text in genders %}
+                <div class="radio-button">
+                  <input type="radio" id="gender-{{ value }}" name="gender" value="{{ value }}" x-model="gender" {% if value == 'MALE' %}checked{% endif %} required>
+                  <label for="gender-{{ value }}" class="radio-label">{{ text }}</label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
 
-      <label>Latitude
-        <input type="number" name="latitude" step="any" value="52.52" required>
-      </label>
+            <div class="place-field">
+              <label for="place" class="label-major">Birth place:</label>
+              <input
+                type="text"
+                id="place"
+                class="input-text"
+                autocomplete="off"
+                placeholder="Start typing a city…"
+                x-model="placeQuery"
+                @input.debounce.400ms="searchPlaces()"
+              >
+              <ul class="suggestion-list" x-show="suggestions.length" x-cloak>
+                <template x-for="suggestion in suggestions" :key="suggestion.label + suggestion.lat">
+                  <li class="place-suggestion" @click="selectPlace(suggestion)">
+                    <span x-text="suggestion.label"></span>
+                    <small x-text="'Latitude: ' + suggestion.lat.toFixed(2) + ', Longitude: ' + suggestion.lon.toFixed(2)"></small>
+                  </li>
+                </template>
+              </ul>
 
-      <label>Longitude
-        <input type="number" name="longitude" step="any" value="13.40" required>
-      </label>
+              <div class="input-columns">
+                <div>
+                  <label for="latitude-ui">Latitude:</label>
+                  <input
+                    type="number" step="any" min="-90" max="90"
+                    id="latitude-ui" class="input-text"
+                    x-model="latitude" :disabled="!manualCoords" @change="fetchTimezone()"
+                  >
+                  <input type="hidden" name="latitude" :value="latitude">
+                </div>
+                <div>
+                  <label for="longitude-ui">Longitude:</label>
+                  <input
+                    type="number" step="any" min="-180" max="180"
+                    id="longitude-ui" class="input-text"
+                    x-model="longitude" :disabled="!manualCoords" @change="fetchTimezone()"
+                  >
+                  <input type="hidden" name="longitude" :value="longitude">
+                </div>
+              </div>
+              <div>
+                <label class="additional-checkbox">
+                  <input type="checkbox" x-model="manualCoords">
+                  <span>Manually set coordinates</span>
+                </label>
+                <span tabindex="0" data-tip="If the place of birth is not displayed as a suggestion, you can specify the coordinates manually in “Decimal degrees” (DD) format.">?</span>
+              </div>
+            </div>
 
-      <label>Namkha type
-        <select name="namkha_type">
-          {% for value, text in namkha_types %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-        </select>
-      </label>
+            <div>
+              <label for="birth_date" class="label-major">Day of birth:</label>
+              <input type="date" id="birth_date" name="birth_date" class="input-text" value="1985-03-15" required x-ref="birthDate">
+              <div class="input-columns">
+                <div>
+                  <label for="birth_time" class="label-major">Birth time:</label>
+                  <input type="time" id="birth_time" name="birth_time" class="input-text" value="14:30" required x-ref="birthTime">
+                </div>
+                <div>
+                  <label for="timezone-ui">Birth time zone:</label>
+                  <select id="timezone-ui" class="input-text" x-model="timezone" :disabled="!manualTimezone">
+                    {% for tz in timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+                  </select>
+                  <input type="hidden" name="timezone" :value="timezone">
+                </div>
+              </div>
+              <label class="additional-checkbox">
+                <input type="checkbox" x-model="manualTimezone">
+                <span>Manually set time zone</span>
+              </label>
+              <span tabindex="0" data-tip="This app detects the time zone (including DST) automatically, based on the place of birth. Only edit this manually if you are certain the detected time zone is wrong.">?</span>
 
-      <label>Method
-        <select name="method">
-          {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-        </select>
-      </label>
+              <div class="inline-tooltip" x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)" x-cloak>
+                <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
+                with a precision of at least 10 minutes. Please do a western astrology birth chart
+                rectification if you are unsure.
+              </div>
+            </div>
+          </div>
 
-      <button type="submit">Calculate</button>
-    </form>
+          <div class="form-mains">
+            <div class="input-columns">
+              <button type="button" @click="resetForm()">Reset</button>
+              <button type="submit"><img src="/static/img/calculate.svg" alt="">Calculate</button>
+            </div>
+          </div>
+        </form>
+      </div>
 
-    <section id="result"></section>
-  </main>
+      <div id="result" class="result">
+        <div class="diagrams">
+          <div class="image-holder"><img src="/static/img/logo_blurred_ink.svg" alt=""></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="about">
+      <h2>About</h2>
+      <p>
+        This web app calculates a
+        <a href="https://en.wikipedia.org/wiki/Namkha">Namkha thread-cross</a> colour
+        scheme in the tradition of
+        <a href="https://en.wikipedia.org/wiki/Namkhai_Norbu">Chögyal Namkhai Norbu
+        Rinpoche</a>. Enter the date, time, and place of birth, and it computes the
+        harmonization of the elements and renders a printable sheet with the colour
+        table and an illustration of the made Namkha.
+      </p>
+      <p>
+        The project is in an alpha stage – all calculations should be checked manually
+        when making a real Namkha.
+      </p>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      <a href="https://namkha-encyclopedia.com">Namkha Encyclopedia</a>
+    </div>
+  </footer>
+
+  <script>
+    function namkhaForm() {
+      return {
+        method: 'CNNR',
+        namkhaType: 'YEAR',
+        gender: 'MALE',
+        placeQuery: '',
+        suggestions: [],
+        manualCoords: false,
+        latitude: '52.52',
+        longitude: '13.40',
+        manualTimezone: false,
+        timezone: 'Europe/Berlin',
+
+        async searchPlaces() {
+          const query = this.placeQuery.trim();
+          if (query.length < 3) { this.suggestions = []; return; }
+          try {
+            const response = await fetch(
+              `https://photon.komoot.io/api/?lang=en&limit=5&q=${encodeURIComponent(query)}`
+            );
+            const data = await response.json();
+            this.suggestions = (data.features || []).map(feature => {
+              const properties = feature.properties || {};
+              const [lon, lat] = feature.geometry.coordinates;
+              const label = [properties.name, properties.state, properties.country]
+                .filter(Boolean)
+                .join(', ');
+              return { label, lat, lon };
+            });
+          } catch (error) {
+            this.suggestions = [];
+          }
+        },
+
+        selectPlace(suggestion) {
+          this.placeQuery = suggestion.label;
+          this.latitude = suggestion.lat.toFixed(4);
+          this.longitude = suggestion.lon.toFixed(4);
+          this.suggestions = [];
+          this.fetchTimezone();
+        },
+
+        async fetchTimezone() {
+          if (this.manualTimezone || this.latitude === '' || this.longitude === '') return;
+          try {
+            const response = await fetch(
+              `/timezone?latitude=${this.latitude}&longitude=${this.longitude}`
+            );
+            const data = await response.json();
+            if (data.timezone) this.timezone = data.timezone;
+          } catch (error) {
+            /* keep current timezone on failure */
+          }
+        },
+
+        resetForm() {
+          Object.assign(this, {
+            method: 'CNNR',
+            namkhaType: 'YEAR',
+            gender: 'MALE',
+            placeQuery: '',
+            suggestions: [],
+            manualCoords: false,
+            latitude: '52.52',
+            longitude: '13.40',
+            manualTimezone: false,
+            timezone: 'Europe/Berlin',
+          });
+          // Native-only fields (no x-model) — restore HTML defaults by hand.
+          this.$refs.name.value = '';
+          this.$refs.birthDate.value = '1985-03-15';
+          this.$refs.birthTime.value = '14:30';
+        },
+      };
+    }
+  </script>
 </body>
 </html>
