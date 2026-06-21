@@ -8,7 +8,7 @@ import pytz
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {
     nc.Element.WOOD: "#3ABE5B",
-    nc.Element.FIRE: "#E53B43",
+    nc.Element.FIRE: "#C81D24",
     nc.Element.EARTH: "#FBD448",
     nc.Element.METAL: "#F9F7F8",
     nc.Element.WATER: "#3E7DC6",
