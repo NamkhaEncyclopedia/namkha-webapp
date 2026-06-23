@@ -4,31 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Namkha Calculator</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/htmx.min.js"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
 <body>
-  <header>
-    <a href="#"><img class="logo" src="/static/img/logo.svg" alt="Namkha Encyclopedia"></a>
-    <nav>
+  <a class="skip-link" href="#calculator">Skip to content</a>
+  <header x-data="{ navOpen: false }">
+    <div class="header-bar">
+      <a href="#calculator"><img class="logo" src="/static/img/logo.svg" alt="Namkha Encyclopedia"></a>
+      <span class="nav-title" aria-label="Namkha Calculator by Namkha Encyclopedia">
+        <span aria-hidden="true">
+          <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">C</span><span class="ital">alculator</span>
+          <span class="by">by <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">E</span><span class="ital">ncyclopedia</span></span>
+        </span>
+      </span>
+      <button
+        type="button"
+        class="nav-toggle"
+        :aria-expanded="navOpen"
+        aria-controls="primary-nav"
+        @click="navOpen = !navOpen"
+      >
+        <span class="sr-only">Menu</span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+        <span class="nav-toggle-bar" aria-hidden="true"></span>
+      </button>
+    </div>
+    <nav id="primary-nav" :class="{ 'is-open': navOpen }">
       <ul>
-        <li><a href="#calculator">Calculator</a></li>
-        <li><a href="#about">About</a></li>
-        <li><a href="https://github.com/NamkhaEncyclopedia" target="_blank" rel="noopener">Source Code</a></li>
+        <li><span class="nav-diamond nav-diamond--wood" aria-hidden="true"></span><a href="#about" @click="navOpen = false">About</a></li>
+        <li><span class="nav-diamond nav-diamond--fire" aria-hidden="true"></span><a href="https://github.com/NamkhaEncyclopedia/namkha-webapp" target="_blank" rel="noopener noreferrer">Source Code{% include "_external_link_icon.html" %}</a></li>
+        <li><span class="nav-diamond nav-diamond--water" aria-hidden="true"></span><a href="https://namkha-encyclopedia.com/" target="_blank" rel="noopener">Namkha Encyclopedia{% include "_external_link_icon.html" %}</a></li>
       </ul>
     </nav>
   </header>
 
   <div class="container">
-    <h1 class="title" id="calculator">Namkha Calculator</h1>
+    <h1 class="title" id="calculator" tabindex="-1">Namkha Calculator</h1>
+    <div class="version-badges">
+      <span class="badge-row">
+        <span class="badge"><span class="badge-key">library</span><span class="badge-val">v{{ library_version }}</span></span>
+        {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
+      </span>
+      <span class="badge-row">
+        <span class="badge"><span class="badge-key">app</span><span class="badge-val">v{{ app_version }}</span></span>
+        {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
+      </span>
+    </div>
 
     <section class="application">
       <div class="form-container">
         <form
+          class="calculator-form"
           hx-post="/calculate"
           hx-target="#result"
           hx-swap="innerHTML"
+          hx-disabled-elt="find button[type='submit']"
           x-data="namkhaForm()"
           x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
         >
@@ -56,11 +91,13 @@
                     name="namkha_type"
                     value="{{ value }}"
                     x-model="namkhaType"
-                    :disabled="method === 'CNNR' && '{{ value }}' !== 'YEAR'"
+                    {# TODO: unfreeze MONTH-DAY-HOUR once library calculation functions for those types are ready; revert to method-based gating only #}
+                    :disabled="'{{ value }}' !== 'YEAR'"
                     {% if value == 'YEAR' %}checked{% endif %}
                     required
                   >
                   <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
+                  {% if value != 'YEAR' %}<span class="coming-soon-cover" aria-hidden="true">Coming soon</span>{% endif %}
                 </div>
                 {% endfor %}
               </div>
@@ -82,23 +119,42 @@
 
             <div class="place-field">
               <label for="place" class="label-major">Birth place:</label>
-              <input
-                type="text"
-                id="place"
-                class="input-text"
-                autocomplete="off"
-                placeholder="Start typing a city…"
-                x-model="placeQuery"
-                @input.debounce.400ms="searchPlaces()"
-              >
-              <ul class="suggestion-list" x-show="suggestions.length" x-cloak>
-                <template x-for="suggestion in suggestions" :key="suggestion.label + suggestion.lat">
-                  <li class="place-suggestion" @click="selectPlace(suggestion)">
+              <div class="input-with-spinner">
+                <input
+                  type="text"
+                  id="place"
+                  class="input-text"
+                  autocomplete="off"
+                  placeholder="Start typing a city…"
+                  role="combobox"
+                  aria-controls="place-listbox"
+                  aria-autocomplete="list"
+                  :aria-expanded="suggestions.length > 0"
+                  :aria-activedescendant="activeIndex >= 0 ? 'place-option-' + activeIndex : null"
+                  x-model="placeQuery"
+                  @input.debounce.400ms="searchPlaces()"
+                  @keydown="onPlaceKeydown($event)"
+                  @blur="closeSuggestions()"
+                >
+                <span class="spinner place-spinner" role="status" aria-label="Searching places" x-show="isSearchingPlaces" x-cloak></span>
+              </div>
+              <ul class="suggestion-list" id="place-listbox" role="listbox" x-show="suggestions.length" x-cloak>
+                <template x-for="(suggestion, index) in suggestions" :key="suggestion.label + suggestion.lat">
+                  <li
+                    class="place-suggestion"
+                    role="option"
+                    :id="'place-option-' + index"
+                    :aria-selected="index === activeIndex"
+                    :class="{ 'is-active': index === activeIndex }"
+                    @mousedown.prevent="selectPlace(suggestion)"
+                  >
                     <span x-text="suggestion.label"></span>
                     <small x-text="'Latitude: ' + suggestion.lat.toFixed(2) + ', Longitude: ' + suggestion.lon.toFixed(2)"></small>
                   </li>
                 </template>
               </ul>
+              <p class="place-status" role="alert" x-show="placesError" x-cloak x-text="placesError"></p>
+              <p class="place-status" role="status" x-show="!isSearchingPlaces && !placesError && placeQuery.trim().length >= 3 && suggestions.length === 0" x-cloak>No places found.</p>
 
               <div class="input-columns">
                 <div>
@@ -125,7 +181,10 @@
                   <input type="checkbox" x-model="manualCoords">
                   <span>Manually set coordinates</span>
                 </label>
-                <span tabindex="0" data-tip="If the place of birth is not displayed as a suggestion, you can specify the coordinates manually in “Decimal degrees” (DD) format.">?</span>
+                <span class="help-tip">
+                  <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-coords" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
+                  <span role="tooltip" id="tip-coords" class="help-text help-text--end">If the place of birth is not displayed as a suggestion, you can specify the coordinates manually in “Decimal degrees” (DD) format.</span>
+                </span>
               </div>
             </div>
 
@@ -149,9 +208,12 @@
                 <input type="checkbox" x-model="manualTimezone">
                 <span>Manually set time zone</span>
               </label>
-              <span tabindex="0" data-tip="This app detects the time zone (including DST) automatically, based on the place of birth. Only edit this manually if you are certain the detected time zone is wrong.">?</span>
+              <span class="help-tip">
+                <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-timezone" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
+                <span role="tooltip" id="tip-timezone" class="help-text">This app detects the time zone (including DST) automatically, based on the place of birth. Only edit this manually if you are certain the detected time zone is wrong.</span>
+              </span>
 
-              <div class="inline-tooltip" x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)" x-cloak>
+              <div class="inline-tooltip" role="alert" x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)" x-cloak>
                 <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
                 with a precision of at least 10 minutes. Please do a western astrology birth chart
                 rectification if you are unsure.
@@ -162,17 +224,22 @@
           <div class="form-mains">
             <div class="input-columns">
               <button type="button" @click="resetForm()">Reset</button>
-              <button type="submit"><img src="/static/img/calculate.svg" alt="">Calculate</button>
+              <button type="submit">
+                <img class="icon-calculate" src="/static/img/calculate.svg" alt="">
+                <span class="spinner htmx-indicator" role="status" aria-label="Calculating"></span>
+                Calculate
+              </button>
             </div>
           </div>
         </form>
       </div>
 
-      <div id="result" class="result">
+      <div id="result" class="result" role="region" aria-live="polite" aria-label="Calculation result"></div>
+      <template id="result-placeholder">
         <div class="diagrams">
           <div class="image-holder"><img src="/static/img/logo_blurred_ink.svg" alt=""></div>
         </div>
-      </div>
+      </template>
     </section>
 
     <section id="about" class="about">
@@ -195,11 +262,35 @@
 
   <footer>
     <div class="container">
-      <a href="https://namkha-encyclopedia.com">Namkha Encyclopedia</a>
+      <a href="#" onclick="scrollToTop(); return false;">
+        <img class="logo" src="/static/img/logo.svg" alt="Back to top">
+      </a>
+      <p class="footer-legal">
+        &copy; {{ current_year }}
+        <a href="https://namkha-encyclopedia.com" target="_blank" rel="noopener noreferrer">Namkha Encyclopedia</a>.
+        Licensed under the
+        <a href="https://github.com/NamkhaEncyclopedia/namkha-webapp/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache License 2.0</a>.
+      </p>
     </div>
   </footer>
 
   <script>
+    function scrollToTop() {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+    }
+
+    document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
+
+    document.body.addEventListener('htmx:afterSwap', (event) => {
+      if (event.detail.target.id !== 'result') return;
+      // aria-live on #result already announces the update to screen readers;
+      // scroll only, don't steal focus (.focus() triggers a caret-browsing-style
+      // blinking cursor in the focused element for some Firefox users).
+      const scrollTarget = event.detail.target.querySelector('.download-link') || event.detail.target;
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
     function namkhaForm() {
       return {
         method: 'CNNR',
@@ -207,6 +298,9 @@
         gender: 'MALE',
         placeQuery: '',
         suggestions: [],
+        activeIndex: -1,
+        isSearchingPlaces: false,
+        placesError: '',
         manualCoords: false,
         latitude: '52.52',
         longitude: '13.40',
@@ -214,12 +308,16 @@
         timezone: 'Europe/Berlin',
 
         async searchPlaces() {
+          this.activeIndex = -1;
+          this.placesError = '';
           const query = this.placeQuery.trim();
           if (query.length < 3) { this.suggestions = []; return; }
+          this.isSearchingPlaces = true;
           try {
             const response = await fetch(
               `https://photon.komoot.io/api/?lang=en&limit=5&q=${encodeURIComponent(query)}`
             );
+            if (!response.ok) throw new Error('Place search request failed');
             const data = await response.json();
             this.suggestions = (data.features || []).map(feature => {
               const properties = feature.properties || {};
@@ -231,6 +329,9 @@
             });
           } catch (error) {
             this.suggestions = [];
+            this.placesError = 'Could not search places. You can enter coordinates manually below, or try again later.';
+          } finally {
+            this.isSearchingPlaces = false;
           }
         },
 
@@ -238,8 +339,50 @@
           this.placeQuery = suggestion.label;
           this.latitude = suggestion.lat.toFixed(4);
           this.longitude = suggestion.lon.toFixed(4);
-          this.suggestions = [];
+          this.closeSuggestions();
           this.fetchTimezone();
+        },
+
+        // On small screens the help tooltip is position:fixed; align its top with the
+        // trigger so it sits at mouse/trigger level instead of pinned to a screen edge.
+        positionTip(event) {
+          const tip = event.currentTarget.nextElementSibling;
+          if (!tip) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          tip.style.setProperty('--tip-top', `${rect.bottom + 4}px`);
+        },
+
+        closeSuggestions() {
+          this.suggestions = [];
+          this.activeIndex = -1;
+          this.placesError = '';
+        },
+
+        onPlaceKeydown(event) {
+          if (!this.suggestions.length) {
+            if (event.key === 'ArrowDown') this.searchPlaces();
+            return;
+          }
+          switch (event.key) {
+            case 'ArrowDown':
+              event.preventDefault();
+              this.activeIndex = (this.activeIndex + 1) % this.suggestions.length;
+              break;
+            case 'ArrowUp':
+              event.preventDefault();
+              this.activeIndex =
+                (this.activeIndex - 1 + this.suggestions.length) % this.suggestions.length;
+              break;
+            case 'Enter':
+              if (this.activeIndex >= 0) {
+                event.preventDefault();  // keep Enter from submitting the form
+                this.selectPlace(this.suggestions[this.activeIndex]);
+              }
+              break;
+            case 'Escape':
+              this.closeSuggestions();
+              break;
+          }
         },
 
         async fetchTimezone() {
@@ -262,16 +405,20 @@
             gender: 'MALE',
             placeQuery: '',
             suggestions: [],
+            activeIndex: -1,
             manualCoords: false,
-            latitude: '52.52',
-            longitude: '13.40',
+            latitude: '',
+            longitude: '',
             manualTimezone: false,
-            timezone: 'Europe/Berlin',
+            timezone: '',
+            isSearchingPlaces: false,
+            placesError: '',
           });
-          // Native-only fields (no x-model) — restore HTML defaults by hand.
+          // Native-only fields (no x-model) — clear by hand.
           this.$refs.name.value = '';
-          this.$refs.birthDate.value = '1985-03-15';
-          this.$refs.birthTime.value = '14:30';
+          this.$refs.birthDate.value = '';
+          this.$refs.birthTime.value = '';
+          document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
         },
       };
     }

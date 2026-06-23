@@ -1,12 +1,13 @@
 """FastAPI app: form -> calculate_namkha -> (Typst sheet <- inline SVG) -> PDF."""
 
 import time
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
 import namkha_calculator as nc
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
@@ -66,6 +67,13 @@ def _timezone_rate_limited(client: str) -> bool:
     return len(recent) > TIMEZONE_RATE_LIMIT
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Browsers and crawlers request /favicon.ico at the root regardless of the
+    <link> tags; redirect to the static file instead of 404ing."""
+    return RedirectResponse("/static/img/favicon.ico")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(
@@ -77,7 +85,33 @@ async def index(request: Request):
             "methods": constants.METHODS,
             "timezones": constants.TIMEZONES,
             "fields": FIELDS,
+            "library_version": constants.LIBRARY_VERSION,
+            "app_version": constants.APP_VERSION,
+            "prerelease_label": constants.PRERELEASE_LABEL,
+            "current_year": datetime.now().year,
         },
+    )
+
+
+def _userfriendly_calculation_error(exc: ValueError) -> str:
+    """Map namkha_calculator's own ValueErrors to user-facing text instead of
+    showing the raw message, which names an internal (the ephemeris file)."""
+    message = str(exc)
+    if "supports only the CLASSIC" in message:
+        return f"{message}. Switch the calculation method to Classic."
+    if "outside the supported range" in message:
+        message = message.replace(" (limited by the bundled ephemeris)", "")
+        return message[0].upper() + message[1:]
+    return "Could not calculate this Namkha; check the birth date, time, and place."
+
+
+def _result_response(
+    request: Request, form, error: str | None = None, svg: str | None = None
+) -> HTMLResponse:
+    """Single context shape for _result.html, used by both the success and
+    error swaps so the template never sees a partial context."""
+    return templates.TemplateResponse(
+        request, "_result.html", {"error": error, "svg": svg, "form": form}
     )
 
 
@@ -86,27 +120,41 @@ async def calculate(request: Request):
     form = await request.form()
     try:
         namkha_request = build_request(form)
+    except ValueError as exc:
+        # build_request only raises ValueErrors with user-facing messages.
+        return _result_response(request, form, error=str(exc))
+
+    try:
         result = nc.calculate_namkha(
             namkha_request.namkha_type, namkha_request.subject, namkha_request.method
         )
         svg = await run_in_threadpool(render_svg, result, namkha_request)
     except ValueError as exc:
-        return templates.TemplateResponse(
-            request, "_result.html", {"error": str(exc), "svg": None, "form": form}
+        return _result_response(
+            request, form, error=_userfriendly_calculation_error(exc)
         )
-    return templates.TemplateResponse(
-        request, "_result.html", {"error": None, "svg": svg, "form": form}
-    )
+
+    return _result_response(request, form, svg=svg)
 
 
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
     form = await request.form()
-    namkha_request = build_request(form)
-    result = nc.calculate_namkha(
-        namkha_request.namkha_type, namkha_request.subject, namkha_request.method
-    )
-    pdf = await run_in_threadpool(render_pdf, result, namkha_request)
+    try:
+        namkha_request = build_request(form)
+    except ValueError as exc:
+        # build_request only raises ValueErrors with user-facing messages.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        result = nc.calculate_namkha(
+            namkha_request.namkha_type, namkha_request.subject, namkha_request.method
+        )
+        pdf = await run_in_threadpool(render_pdf, result, namkha_request)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=_userfriendly_calculation_error(exc)
+        ) from exc
     return Response(
         content=pdf,
         media_type="application/pdf",

@@ -1,51 +1,110 @@
-@font-face {
-  font-family: "Alegreya SC";
-  font-weight: 400;
-  font-style: normal;
-  src: url("/static/fonts/AlegreyaSC-Regular.ttf") format("truetype");
-}
-@font-face {
-  font-family: "Alegreya SC";
-  font-weight: 700;
-  font-style: normal;
-  src: url("/static/fonts/AlegreyaSC-Bold.ttf") format("truetype");
-}
-
 :root {
   font-family: system-ui, sans-serif;
 
-  --plum: #281029;        /* header / footer */
-  --title: #e67432;       /* page title */
-  --select: #f9b85d;      /* checked radio */
-  --action: #b00c0c;      /* submit button */
-  --result: #205d15;      /* download button */
-  --panel: #f7f6f6;       /* form panel bg */
-  --panel-border: #99f6e4;/* teal-200 */
-  --img-holder: #cddcec;   /* muted light-blue result placeholder bg */
+  --header-footer-bg: #281029;
+  --title-color: #ba744c;
+  --radio-checked-bg: #f9b85d;
+  --radio-focus-ring: #e0a453;
+  --submit-button-bg: #b00c0c;
+  --submit-button-hover-bg: #9c0a0a;
+  --download-button-bg: #205d15;
+  --download-button-hover-bg: #1a4d11;
+  --form-panel-bg: #f7f6f6;
+  --form-panel-gradient-start: #f4fbfa;
+  --form-panel-border: #99f6e4; /* teal-200 */
+  --image-placeholder-bg: #cddcec; /* muted light-blue result placeholder */
 
   --gray-200: #e5e7eb;
   --gray-300: #d1d5db;
   --gray-400: #9ca3af;
-  --gray-500: #6b7280;
   --gray-600: #4b5563;
-  --teal-900: #134e4a;
-  --green-100: #dcfce7;
-  --green-300: #86efac;
-  --green-500: #22c55e;
-  --yellow-100: #fef9c3;
-  --slate-500: #64748b;
+  --radio-checked-text: #134e4a;
+  --suggestion-active-bg: #dcfce7;
+  --suggestion-border: #86efac;
+  --suggestion-accent: #22c55e;
+  --tooltip-bg: #fef9c3;
+  --help-trigger-bg: #64748b;
+
+  --color-white: #fff;
+  --page-bg: #f4f4f4;
+  --body-text: #222;
+  --nav-link-hover: #facc15;
+  --tooltip-text: #000;
+  --reset-button-hover-bg: #c3c7cd;
+  --input-disabled-bg: #f3f4f6;
+  --about-divider: #0d9488;
+  --error-color: #c62828;
+  --error-bg: #fdecea;
+  --error-border: #f3b4ad;
+  --hint-text: #555;
+
+  --element-wood: #3abe5b;
+  --element-fire: #c81d24;
+  --element-water: #3e7dc6;
+}
+
+/* ---- Vendored fonts (no Google Fonts CDN) ---- */
+@font-face {
+  font-family: "Alegreya";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/Alegreya-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Alegreya";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/Alegreya-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Alegreya SC";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/AlegreyaSC-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Alegreya SC";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/AlegreyaSC-Bold.ttf") format("truetype");
 }
 
 * { box-sizing: border-box; }
 [x-cloak] { display: none !important; }
 
-body { margin: 0; background: #f4f4f4; color: #222; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+body { margin: 0; background: var(--page-bg); color: var(--body-text); }
 
 .container { max-width: 1152px; margin: 0 auto; padding: 0 1rem; }
 
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--header-footer-bg);
+  color: var(--color-white);
+}
+.skip-link:focus { left: 0; }
+
 /* ---- Header / footer ---- */
 header,
-footer { background: var(--plum); color: #fff; }
+footer { background: var(--header-footer-bg); color: var(--color-white); }
 
 header {
   display: flex;
@@ -55,7 +114,56 @@ header {
   padding: 1rem;
   font-size: 1.125rem;
 }
-header img.logo { height: 2.5rem; margin: 0.25rem; }
+.header-bar {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+}
+header img.logo,
+footer img.logo { height: 2.5rem; margin: 0.25rem; }
+.header-bar > a { flex: none; }
+
+/* "Namkha Calculator by Namkha Encyclopedia" — caps stay upright, lowercase
+   runs go italic (per-letter spans in the markup); "by" is greyed out. */
+.nav-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 1rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: "Alegreya", serif;
+  font-size: 1.35rem;
+  color: var(--color-white);
+  text-shadow: 1px 1px 0 #000, 2px 2px 0 #000;
+}
+.nav-title .cap { font-style: normal; }
+.nav-title .ital { font-style: italic; }
+.nav-title .by { color: #aaaaaa; }
+
+/* Hamburger toggle: hidden on desktop, shown once the nav needs to collapse. */
+.nav-toggle {
+  display: none;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.nav-toggle-bar {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--color-white);
+}
+
 header nav ul {
   display: flex;
   gap: 1.5rem;
@@ -64,11 +172,55 @@ header nav ul {
   padding: 0;
   font-size: 1rem;
 }
-header nav a { color: #fff; text-decoration: none; }
-header nav a:hover { color: #facc15; }
+header nav a { color: var(--color-white); text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; }
+header nav a:hover { color: var(--nav-link-hover); }
+.external-link-icon { width: 0.8rem; height: 0.8rem; flex: none; }
+header nav li { display: flex; align-items: center; gap: 0.4rem; }
+.nav-diamond {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  transform: rotate(45deg);
+}
+.nav-diamond--wood { background: var(--element-wood); }
+.nav-diamond--fire { background: var(--element-fire); }
+.nav-diamond--water { background: var(--element-water); }
+
+/* Below this width the title + 3 links no longer fit one row: collapse the
+   nav into a hamburger-triggered dropdown instead of wrapping/squeezing. */
+@media (max-width: 640px) {
+  .nav-title { font-size: 1.05rem; }
+  .nav-toggle { display: flex; }
+  header nav {
+    display: none;
+    flex-basis: 100%;
+    order: 1;
+  }
+  header nav.is-open { display: block; }
+  header nav ul {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding-top: 1rem;
+  }
+}
 
 footer { margin-top: 2rem; padding: 1rem; }
-footer a { color: #fff; text-decoration: none; }
+footer .container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+footer a { color: var(--color-white); text-decoration: none; }
+footer a:hover { color: var(--nav-link-hover); }
+.footer-legal {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--gray-300);
+}
+.footer-legal a { text-decoration: underline; }
 
 /* ---- Title ---- */
 h1.title {
@@ -76,10 +228,44 @@ h1.title {
   font-family: "Alegreya SC", serif;
   font-size: 2.75rem;
   line-height: 1.1;
-  color: var(--title);
+  color: var(--title-color);
   margin: 1.5rem 0 0;
+  /* tabindex="-1" skip-link target: not Tab-reachable, so suppress the
+     click-focus ring; user-select:none avoids a Firefox caret-on-focus quirk. */
+  outline: none;
+  user-select: none;
 }
-.version { font-size: 0.85rem; color: var(--gray-600); margin-left: 0.5rem; }
+/* Flat GitHub-readme-style version badges: a two-segment label|value pill plus
+   a single-segment pre-release flag, stacked one row per component. */
+.version-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+}
+.badge-row { display: inline-flex; align-items: center; gap: 0.3rem; }
+.badge {
+  display: inline-flex;
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+.badge-key,
+.badge-val,
+.badge-flag {
+  padding: 0.12rem 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--color-white);
+  white-space: nowrap;
+}
+.badge-key { background: var(--header-footer-bg); }
+.badge-val { background: var(--about-divider); }
+.badge-flag {
+  display: inline-flex;
+  border-radius: 0.25rem;
+  background: var(--title-color);
+}
 
 /* ---- Application two-column layout ---- */
 .application {
@@ -91,13 +277,16 @@ h1.title {
 .result { width: 100%; }
 
 @media (min-width: 768px) {
+  .application,
+  h1.title,
+  .version-badges { padding-left: 1rem; padding-right: 1rem; }
   .application { flex-direction: row; }
   .form-container { max-width: 24rem; }
   .result { margin-left: 2.5rem; }
 }
 
 /* ---- Form ---- */
-form { padding-top: 1rem; }
+.calculator-form { padding-top: 1rem; }
 
 .form-mains {
   display: grid;
@@ -109,8 +298,8 @@ form { padding-top: 1rem; }
 .label-major { font-weight: 500; }
 
 .namkha-data-by-type {
-  background: linear-gradient(180deg, #f4fbfa, var(--panel));
-  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, var(--form-panel-gradient-start), var(--form-panel-bg));
+  border: 1px solid var(--form-panel-border);
   border-radius: 0.5rem;
   box-shadow: 0 4px 14px rgba(19, 78, 74, 0.1);
   display: grid;
@@ -135,7 +324,7 @@ form { padding-top: 1rem; }
   border-color: var(--gray-400);
   box-shadow: 0 0 0 3px rgba(249, 184, 93, 0.5);
 }
-.input-text:disabled { background: #f3f4f6; color: var(--gray-600); }
+.input-text:disabled { background: var(--input-disabled-bg); color: var(--gray-600); }
 
 /* ---- Radio toggle group ---- */
 .radio-toggle {
@@ -147,7 +336,22 @@ form { padding-top: 1rem; }
   margin-top: 0.25rem;
   overflow: hidden;
 }
-.radio-button { flex: 1 1 0; display: flex; }
+.radio-button { flex: 1 1 0; display: flex; position: relative; }
+.coming-soon-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gray-400);
+  color: #fff;
+  font-size: 0.75rem;
+  border-radius: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.radio-button:hover .coming-soon-cover { opacity: 1; }
 .radio-toggle input[type="radio"] {
   position: absolute;
   opacity: 0;
@@ -162,12 +366,16 @@ form { padding-top: 1rem; }
   user-select: none;
 }
 .radio-toggle input[type="radio"]:checked + .radio-label {
-  background: var(--select);
-  color: var(--teal-900);
+  background: var(--radio-checked-bg);
+  color: var(--radio-checked-text);
+}
+/* overflow:hidden on .radio-toggle clips a normal outline, use inset ring */
+.radio-toggle input[type="radio"]:focus-visible + .radio-label {
+  box-shadow: inset 0 0 0 3px var(--radio-focus-ring);
 }
 .radio-toggle input[type="radio"]:disabled + .radio-label {
   color: var(--gray-400);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 /* ---- 2-col input rows ---- */
@@ -188,6 +396,13 @@ form { padding-top: 1rem; }
 
 /* ---- Place autocomplete ---- */
 .place-field { position: relative; }
+.input-with-spinner { position: relative; }
+.place-spinner {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
 .suggestion-list {
   position: absolute;
   z-index: 50;
@@ -196,8 +411,8 @@ form { padding-top: 1rem; }
   margin-top: -0.25rem;
   list-style: none;
   padding: 0;
-  background: #fff;
-  border: 1px solid var(--green-500);
+  background: var(--color-white);
+  border: 1px solid var(--suggestion-accent);
   border-radius: 0.375rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   max-height: 16rem;
@@ -205,71 +420,99 @@ form { padding-top: 1rem; }
 }
 .place-suggestion {
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--green-300);
+  border-bottom: 1px solid var(--suggestion-border);
   font-weight: 500;
   cursor: pointer;
 }
 .place-suggestion:last-child { border-bottom: none; }
-.place-suggestion:hover { background: var(--green-100); }
+.place-suggestion:hover,
+.place-suggestion.is-active { background: var(--suggestion-active-bg); }
 .place-suggestion small {
   display: block;
   color: var(--gray-600);
   font-weight: 400;
   font-style: italic;
 }
+.place-status {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
 
 /* ---- Warning box ---- */
 .inline-tooltip {
   border-radius: 0.375rem;
-  background: var(--yellow-100);
-  border: 1px solid var(--panel-border);
-  color: #000;
+  background: var(--tooltip-bg);
+  border: 1px solid var(--form-panel-border);
+  color: var(--tooltip-text);
   font-size: 0.875rem;
   margin-top: 0.75rem;
   padding: 0.75rem;
 }
 
 /* ---- Hover help tooltip ---- */
-span[data-tip] {
+/* trigger is a real <button>; tip text is a real role="tooltip" element kept in the
+   a11y tree (opacity, not display:none) so aria-describedby always exposes it. */
+.help-tip {
   position: relative;
   display: inline-block;
   margin-left: 0.25rem;
+}
+.help-trigger {
   width: 1.25rem;
   height: 1.25rem;
+  padding: 0;
   border-radius: 9999px;
   border: 1px solid var(--gray-400);
-  background: var(--slate-500);
-  color: #fff;
+  background: var(--help-trigger-bg);
+  color: var(--color-white);
   text-align: center;
   font-size: 0.75rem;
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: 1;
   cursor: help;
 }
-span[data-tip]::before {
-  content: attr(data-tip);
+.help-text {
   position: absolute;
   left: 0;
   top: 1.5rem;
   z-index: 60;
   display: block;
   width: max-content;
-  max-width: 18rem;
+  max-width: min(18rem, calc(100vw - 2rem));
   padding: 1rem;
   font-size: 0.875rem;
   font-weight: 400;
   text-align: left;
-  color: #000;
-  background: var(--yellow-100);
+  color: var(--tooltip-text);
+  background: var(--tooltip-bg);
   border: 1px solid var(--gray-400);
   border-radius: 0.375rem;
   box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
   opacity: 0;
   transform: scale(0);
   transition: opacity 0.15s ease;
+  pointer-events: none;
 }
-span[data-tip]:hover::before,
-span[data-tip]:focus::before { opacity: 1; transform: scale(1); }
+/* triggers near the right edge: anchor the box to the right so it grows leftward */
+.help-text--end { left: auto; right: 0; }
+.help-tip:hover .help-text,
+.help-tip:focus-within .help-text { opacity: 1; transform: scale(1); }
+
+/* small screens: trigger-anchored box overflows, show it as a fixed bottom banner */
+@media (max-width: 480px) {
+  .help-text,
+  .help-text--end {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    top: var(--tip-top, 50%); /* set by positionTip() to the trigger's level */
+    bottom: auto;
+    width: auto;
+    max-width: none;
+    transform-origin: top center;
+  }
+}
 
 /* ---- Buttons ---- */
 button[type="submit"],
@@ -282,10 +525,11 @@ button[type="reset"] {
   font-size: 1rem;
   cursor: pointer;
 }
-button[type="submit"] { background: var(--action); color: #fff; }
-button[type="submit"]:hover { background: #9c0a0a; }
+button[type="submit"] { background: var(--submit-button-bg); color: var(--color-white); }
+button[type="submit"]:hover { background: var(--submit-button-hover-bg); }
+button[type="submit"]:disabled { opacity: 0.7; cursor: wait; }
 button[type="reset"] { background: var(--gray-300); color: var(--gray-600); }
-button[type="reset"]:hover { background: #c3c7cd; }
+button[type="reset"]:hover { background: var(--reset-button-hover-bg); }
 button > img {
   width: 1rem;
   height: 1rem;
@@ -293,17 +537,48 @@ button > img {
   vertical-align: -2px;
   margin-right: 0.25rem;
 }
+.htmx-indicator { display: none; }
+.htmx-request .icon-calculate { display: none; }
+.htmx-request .htmx-indicator {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 0.25rem;
+}
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: var(--color-white);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.place-spinner {
+  border-color: rgba(0, 0, 0, 0.15);
+  border-top-color: var(--suggestion-accent);
+}
 
 /* ---- Result column ---- */
+/* CSS animations (unlike transitions) run automatically on element insertion,
+   so freshly-swapped-in result content fades in with no JS needed. */
+#result > * { animation: result-fade-in 0.4s ease both; }
+@keyframes result-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .download { display: flex; margin-top: 2rem; }
 .download-link,
 button.download-link {
   display: inline-block;
   width: 100%;
+  scroll-margin-top: 1.5rem;
   text-align: center;
-  color: #fff;
+  color: var(--color-white);
   font-weight: 500;
-  background: var(--result);
+  background: var(--download-button-bg);
   border: none;
   border-radius: 0.5rem;
   padding: 0.5rem 1rem;
@@ -313,7 +588,7 @@ button.download-link {
   cursor: pointer;
 }
 .download-link:hover,
-button.download-link:hover { background: #1a4d11; }
+button.download-link:hover { background: var(--download-button-hover-bg); }
 @media (min-width: 768px) {
   .download-link { width: auto; }
 }
@@ -324,16 +599,18 @@ button.download-link:hover { background: #1a4d11; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 26rem;
+  /* Match the A4 portrait proportion of a rendered .page so the placeholder
+     doesn't jump in size once the real result swaps in. */
+  aspect-ratio: 210 / 297;
   padding: 2.5rem;
   border: 1px solid var(--gray-200);
   border-radius: 0.5rem;
-  background: var(--img-holder);
+  background: var(--image-placeholder-bg);
 }
 .image-holder img {
   display: block;
   width: auto;
-  max-width: 55%;
+  max-width: 80%;
   height: auto;
   opacity: 0.85;
 }
@@ -342,7 +619,7 @@ button.download-link:hover { background: #1a4d11; }
 .about {
   padding: 1rem;
   margin-top: 2rem;
-  border-top: 2px solid #0d9488;
+  border-top: 2px solid var(--gray-400);
 }
 .about h2 { font-size: 1.875rem; font-weight: 500; }
 
@@ -355,15 +632,40 @@ button.download-link:hover { background: #1a4d11; }
   gap: 1.5rem;
 }
 .page {
-  background: #fff;
+  background: var(--color-white);
   border: 1px solid var(--gray-200);
   border-radius: 0.5rem;
   box-shadow:
     0 1px 2px rgba(40, 16, 41, 0.06),
     0 6px 16px rgba(40, 16, 41, 0.08);
-  overflow: hidden;
+  /* Horizontal scroll viewport for the A4 page; matters on small screens
+     where the sheet renders wider than the column (see the readability
+     media query below). */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 .page svg { display: block; max-width: 100%; height: auto; }
 
-.error { color: #c62828; font-weight: bold; }
-.hint { font-size: 0.85rem; color: #555; }
+/* Hint only relevant once the sheet overflows and must be scrolled. */
+.sheet-scroll-hint { display: none; margin-bottom: 0.75rem; }
+
+/* Readability threshold (tuned, not a layout breakpoint): below ~75% scale the
+   A4 sheet text drops under ~12px and gets hard to read. Stop shrinking the
+   page; render it at its natural size (floored at 40rem) and let the .page
+   card scroll horizontally. Native pinch-zoom stays available. */
+@media (max-width: 600px) {
+  .page svg { width: auto; max-width: none; min-width: 40rem; height: auto; }
+  .sheet-scroll-hint { display: block; }
+}
+
+.error {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: 0.5rem;
+  color: var(--error-color);
+  font-weight: bold;
+}
+.hint { font-size: 0.85rem; color: var(--hint-text); }

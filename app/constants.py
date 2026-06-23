@@ -1,9 +1,43 @@
 """Static option lists, color map, and sample data for the preview route."""
 
+import importlib.metadata
+import re
+import tomllib
 from datetime import datetime
+from pathlib import Path
 
 import namkha_calculator as nc
 import pytz
+
+# Versions surfaced in the UI as flat badges, computed once at import.
+# Library: same call the sheet render uses, so page and sheet never disagree.
+# App: read from pyproject (package-mode=false, so not an installed dist).
+# Both wrapped: a missing dist or pyproject.toml must not break app startup.
+try:
+    LIBRARY_VERSION = importlib.metadata.version("namkha-calculator")
+except importlib.metadata.PackageNotFoundError:
+    LIBRARY_VERSION = "unknown"
+
+_PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
+try:
+    APP_VERSION = tomllib.loads(_PYPROJECT_PATH.read_text())["project"]["version"]
+except OSError as error:
+    raise RuntimeError(f"could not read {_PYPROJECT_PATH} for app version") from error
+except tomllib.TOMLDecodeError as error:
+    raise RuntimeError(f"could not parse {_PYPROJECT_PATH} as TOML") from error
+except KeyError as error:
+    raise RuntimeError(f"{_PYPROJECT_PATH} missing [project].version") from error
+
+
+def _prerelease_label(version: str) -> str | None:
+    """PEP 440 pre-release segment -> short badge text; None for a stable release."""
+    match = re.search(r"(a|b|rc)\d*", version)
+    return {"a": "alpha", "b": "beta", "rc": "rc"}[match.group(1)] if match else None
+
+
+# Project-wide pre-release marker (the calculation engine governs result validity);
+# shown on both badges. Self-clears once the library ships a stable release.
+PRERELEASE_LABEL = _prerelease_label(LIBRARY_VERSION)  # "alpha" for 0.1.0a3
 
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {

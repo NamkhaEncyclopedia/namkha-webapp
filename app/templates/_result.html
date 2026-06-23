@@ -1,5 +1,5 @@
 {% if error %}
-  <p class="error">{{ error }}</p>
+  <p class="error" role="alert">{{ error }}</p>
 {% else %}
   <div class="download">
     <form method="post" action="/download.pdf">
@@ -9,6 +9,11 @@
   </div>
 
   <div class="diagrams">
-    <div class="sheet">{{ svg | safe }}</div>
+    <p class="hint sheet-scroll-hint">Scroll down and ⭤ to read the full sheet, or download the PDF above.</p>
+    <div
+      class="sheet"
+      role="img"
+      aria-label="Namkha calculation sheet{% if form.get('name') %} for {{ form['name'] }}{% endif %}, {{ form.get('namkha_type', '') | lower }} type, {{ form.get('method', '') | lower }} method"
+    >{{ svg | safe }}</div>
   </div>
 {% endif %}

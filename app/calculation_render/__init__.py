@@ -363,6 +363,11 @@ def _sanitize_svg(svg: bytes) -> bytes:
             value = element.get(attribute)
             if value and value.strip().lower().startswith("javascript:"):
                 del element.attrib[attribute]
+    # the result template gives the whole sheet one accessible name via the
+    # surrounding `.sheet[role=img]`; hide these raw pages from AT so a screen
+    # reader doesn't also wade through their unlabeled internal text/paths.
+    root.set("aria-hidden", "true")
+    root.set("role", "presentation")
     return etree.tostring(root)
 
 
