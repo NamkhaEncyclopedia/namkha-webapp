@@ -67,6 +67,19 @@
           x-data="namkhaForm()"
           x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
         >
+          {% if test_mode_enabled %}
+          <div class="test-mode-picker" x-data="{ fixtures: [], chosen: '', visible: true }" x-init="fetch('/test-mode/fixtures').then(r => r.json()).then(names => fixtures = names)" x-show="visible">
+            <label for="test-mode-fixture" class="sr-only">Test mode — load sample data</label>
+            <select id="test-mode-fixture" class="input-text" x-model="chosen">
+              <option value="">Choose a fixture…</option>
+              <template x-for="fixtureName in fixtures" :key="fixtureName">
+                <option :value="fixtureName" x-text="fixtureName"></option>
+              </template>
+            </select>
+            <button type="button" :disabled="!chosen" @click="fetch(`/test-mode/fixtures/${chosen}`).then(r => r.json()).then(data => applyFixture(data))">Load</button>
+            <button type="button" class="test-mode-close" aria-label="Close test mode picker" @click="visible = false">&times;</button>
+          </div>
+          {% endif %}
           <div class="form-mains">
             <div>
               <label for="method" class="label-major">Calculation method:</label>
@@ -419,6 +432,30 @@
           this.$refs.birthDate.value = '';
           this.$refs.birthTime.value = '';
           document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
+        },
+
+        // Test-mode only: apply a tests/fixtures/*.json fixture (same field
+        // names as app/forms.py FIELDS, plus a `city` label not submitted by
+        // build_request -- shown in the place field for context only) to the
+        // form, same fields resetForm() clears.
+        applyFixture(data) {
+          Object.assign(this, {
+            method: data.method,
+            namkhaType: data.namkha_type,
+            gender: data.gender,
+            placeQuery: data.city || '',
+            suggestions: [],
+            activeIndex: -1,
+            manualCoords: true,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            manualTimezone: true,
+            timezone: data.timezone,
+            placesError: '',
+          });
+          this.$refs.name.value = data.name || '';
+          this.$refs.birthDate.value = data.birth_date;
+          this.$refs.birthTime.value = data.birth_time;
         },
       };
     }

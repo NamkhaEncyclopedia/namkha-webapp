@@ -1,0 +1,12 @@
+{
+  "name": "Sample Woman",
+  "gender": "FEMALE",
+  "birth_date": "1990-07-22",
+  "birth_time": "08:15",
+  "city": "Kathmandu, Nepal",
+  "timezone": "Asia/Kathmandu",
+  "latitude": "27.70",
+  "longitude": "85.32",
+  "namkha_type": "YEAR",
+  "method": "CNNR"
+}

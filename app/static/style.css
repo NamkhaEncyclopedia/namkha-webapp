@@ -297,6 +297,39 @@ h1.title {
 
 .label-major { font-weight: 500; }
 
+/* Dev-only fixture picker (NAMKHA_TEST_MODE=1): floats top-right, below the
+   header's own height (5rem clears logo + padding) so it never overlaps the
+   navbar. Drops back into normal flow on narrow screens, where the header
+   can grow taller (hamburger dropdown) and a fixed offset can't track that. */
+.test-mode-picker {
+  position: fixed;
+  top: 5rem;
+  right: 1rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--gray-200);
+  border: 1px solid var(--gray-300);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.test-mode-picker select.input-text { margin: 0; width: auto; }
+.test-mode-picker button { white-space: nowrap; }
+.test-mode-close {
+  padding: 0 0.4rem;
+  line-height: 1;
+  font-size: 1.1rem;
+  color: var(--gray-600);
+  background: none;
+  border: none;
+}
+.test-mode-close:hover { color: inherit; }
+@media (max-width: 640px) {
+  .test-mode-picker { position: static; margin: 0 0 1rem; }
+}
+
 .namkha-data-by-type {
   background: linear-gradient(180deg, var(--form-panel-gradient-start), var(--form-panel-bg));
   border: 1px solid var(--form-panel-border);

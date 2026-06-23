@@ -1,5 +1,7 @@
 """FastAPI app: form -> calculate_namkha -> (Typst sheet <- inline SVG) -> PDF."""
 
+import json
+import os
 import time
 from datetime import datetime
 from functools import lru_cache
@@ -21,6 +23,11 @@ BASE = Path(__file__).parent
 app = FastAPI(title="Namkha Calculator Web")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
+
+# Off by default: enables the "load sample data" picker on the form, backed by
+# tests/fixtures/*.json. Routes are only registered (not just hidden) when set,
+# so the surface doesn't exist on a normal/production boot.
+TEST_MODE_ENABLED = os.getenv("NAMKHA_TEST_MODE") == "1"
 
 
 @lru_cache(maxsize=1)
@@ -89,6 +96,7 @@ async def index(request: Request):
             "app_version": constants.APP_VERSION,
             "prerelease_label": constants.PRERELEASE_LABEL,
             "current_year": datetime.now().year,
+            "test_mode_enabled": TEST_MODE_ENABLED,
         },
     )
 
@@ -183,3 +191,21 @@ async def timezone_lookup(
         _cached_timezone, round(latitude, 3), round(longitude, 3)
     )
     return {"timezone": zone or "UTC"}
+
+
+if TEST_MODE_ENABLED:
+    FIXTURES_DIR = BASE.parent / "tests" / "fixtures"
+
+    @app.get("/test-mode/fixtures")
+    async def list_fixtures() -> list[str]:
+        return sorted(path.stem for path in FIXTURES_DIR.glob("*.json"))
+
+    @app.get("/test-mode/fixtures/{name}")
+    async def get_fixture(name: str) -> dict:
+        # Build from a bare stem (FastAPI's {name} can't contain "/") and
+        # confirm the result still resolves inside FIXTURES_DIR, so "../x"
+        # tricks via dot-segments in `name` can't escape the fixtures folder.
+        path = (FIXTURES_DIR / f"{name}.json").resolve()
+        if path.parent != FIXTURES_DIR.resolve() or not path.is_file():
+            raise HTTPException(status_code=404)
+        return json.loads(path.read_text())
