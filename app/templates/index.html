@@ -190,11 +190,11 @@
 
             <div>
               <label for="birth_date" class="label-major">Day of birth:</label>
-              <input type="date" id="birth_date" name="birth_date" class="input-text" value="1985-03-15" required x-ref="birthDate">
+              <input type="date" id="birth_date" name="birth_date" class="input-text" required x-ref="birthDate">
               <div class="input-columns">
                 <div>
                   <label for="birth_time" class="label-major">Birth time:</label>
-                  <input type="time" id="birth_time" name="birth_time" class="input-text" value="14:30" required x-ref="birthTime">
+                  <input type="time" id="birth_time" name="birth_time" class="input-text" required x-ref="birthTime">
                 </div>
                 <div>
                   <label for="timezone-ui">Birth time zone:</label>
@@ -302,10 +302,10 @@
         isSearchingPlaces: false,
         placesError: '',
         manualCoords: false,
-        latitude: '52.52',
-        longitude: '13.40',
+        latitude: '',
+        longitude: '',
         manualTimezone: false,
-        timezone: 'Europe/Berlin',
+        timezone: '',
 
         async searchPlaces() {
           this.activeIndex = -1;

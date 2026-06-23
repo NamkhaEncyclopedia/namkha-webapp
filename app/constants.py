@@ -1,9 +1,8 @@
-"""Static option lists, color map, and sample data for the preview route."""
+"""Static option lists and color map."""
 
 import importlib.metadata
 import re
 import tomllib
-from datetime import datetime
 from pathlib import Path
 
 import namkha_calculator as nc
@@ -98,15 +97,3 @@ METHODS = [
     for method in nc.CalculationMethod
 ]
 TIMEZONES = pytz.common_timezones
-
-# TODO: remove before release
-# Sample input used by GET /preview so the sheet shows real data while editing.
-SAMPLE_SUBJECT = nc.Subject(
-    name="Sample Person",
-    gender=nc.Gender.MALE,
-    birth_datetime=datetime(1985, 3, 15, 14, 30),
-    birth_timezone=pytz.timezone("Europe/Berlin"),
-    birth_location=nc.Location(latitude=52.52, longitude=13.40, name="Berlin"),
-)
-SAMPLE_NAMKHA_TYPE = nc.NamkhaType.YEAR
-SAMPLE_METHOD = nc.CalculationMethod.CLASSIC

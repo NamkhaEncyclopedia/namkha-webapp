@@ -183,21 +183,3 @@ async def timezone_lookup(
         _cached_timezone, round(latitude, 3), round(longitude, 3)
     )
     return {"timezone": zone or "UTC"}
-
-
-# TODO Remove before release
-@app.get("/preview", response_class=HTMLResponse)
-async def preview(request: Request):
-    """Editing loop: render the full sheet with sample data; meta-refresh picks
-    up edits to sheet.typ / illustration.svg / render code."""
-    result = nc.calculate_namkha(
-        constants.SAMPLE_NAMKHA_TYPE, constants.SAMPLE_SUBJECT, constants.SAMPLE_METHOD
-    )
-
-    class _NamkhaRequest:
-        subject = constants.SAMPLE_SUBJECT
-        namkha_type = constants.SAMPLE_NAMKHA_TYPE
-        method = constants.SAMPLE_METHOD
-
-    svg = await run_in_threadpool(render_svg, result, _NamkhaRequest())
-    return templates.TemplateResponse(request, "preview.html", {"svg": svg})
