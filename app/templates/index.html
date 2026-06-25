@@ -67,6 +67,7 @@
           x-data="namkhaForm()"
           x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
         >
+          <input type="hidden" name="session_token" value="{{ session_token }}">
           {% if test_mode_enabled %}
           <div class="test-mode-picker" x-data="{ fixtures: [], chosen: '', visible: true }" x-init="fetch('/test-mode/fixtures').then(r => r.json()).then(names => fixtures = names)" x-show="visible">
             <label for="test-mode-fixture" class="sr-only">Test mode — load sample data</label>

@@ -79,6 +79,39 @@ def test_download_pdf_error_is_400(client, fixture_form):
     assert "Switch the calculation method to Classic." in response.json()["detail"]
 
 
+# --- session token gate -------------------------------------------------------------
+
+
+def test_calculate_rejects_missing_session_token(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    del form["session_token"]
+    response = client.post("/calculate", data=form)
+    assert response.status_code == 403
+
+
+def test_calculate_rejects_unknown_session_token(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = "not-a-real-token"
+    response = client.post("/calculate", data=form)
+    assert response.status_code == 403
+
+
+def test_download_pdf_rejects_missing_session_token(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    del form["session_token"]
+    response = client.post("/download.pdf", data=form)
+    assert response.status_code == 403
+
+
+def test_index_issues_usable_session_token(client, fixture_form):
+    page = client.get("/")
+    token = page.text.split('name="session_token" value="')[1].split('"')[0]
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = token
+    response = client.post("/calculate", data=form)
+    assert response.status_code == 200
+
+
 # --- calculate_namkha result cache --------------------------------------------------
 
 

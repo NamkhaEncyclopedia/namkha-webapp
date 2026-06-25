@@ -1,8 +1,11 @@
 """FastAPI app: form -> calculate_namkha -> (Typst sheet <- inline SVG) -> PDF."""
 
 import asyncio
+import ipaddress
 import json
 import os
+import secrets
+import threading
 import time
 from collections import OrderedDict
 from datetime import datetime
@@ -18,7 +21,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import constants
 from app.calculation_render import render_pdf, render_svg
-from app.forms import FIELDS, build_request
+from app.forms import FIELDS, NamkhaRequest, build_request
 
 BASE = Path(__file__).parent
 
@@ -47,7 +50,7 @@ def _timezone_finder():
 # cheap; a per-IP fixed window caps how hard one client can hammer the endpoint.
 TIMEZONE_RATE_LIMIT = 30  # requests per window per client
 TIMEZONE_RATE_WINDOW = 60.0  # seconds
-_timezone_hits: dict[str, list[float]] = {}
+_timezone_hits: dict[str, tuple[float, int]] = {}
 
 
 @lru_cache(maxsize=4096)
@@ -61,20 +64,63 @@ def _cached_timezone(latitude: float, longitude: float) -> str | None:
         return None
 
 
+# Trusted proxy handling for the rate-limit client key. Comma-separated IPs/CIDRs
+# (e.g. "10.0.0.0/8,127.0.0.1") naming reverse proxies allowed to set
+# X-Forwarded-For. Empty by default: with no trusted proxies, the header is
+# never consulted and the direct peer is always used, so a client can't spoof
+# its way into someone else's bucket (or out of its own) by sending the header
+# itself.
+_TRUSTED_PROXIES = [
+    ipaddress.ip_network(cidr.strip())
+    for cidr in os.getenv("NAMKHA_TRUSTED_PROXIES", "").split(",")
+    if cidr.strip()
+]
+
+
+def _is_trusted_proxy(ip: str) -> bool:
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(address in network for network in _TRUSTED_PROXIES)
+
+
+def _client_ip(request: Request) -> str:
+    """Rate-limit bucket key for a request. If the direct peer is a trusted
+    proxy, walk X-Forwarded-For from the right, skipping hops that are
+    themselves trusted proxies, and return the first hop that isn't -- the
+    real client as seen by our outermost trusted proxy. Otherwise the header
+    is untrusted (anyone could set it) and ignored in favor of the direct peer.
+    """
+    direct_peer = request.client.host if request.client else "unknown"
+    if not _is_trusted_proxy(direct_peer):
+        return direct_peer
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    hops = [hop.strip() for hop in forwarded_for.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if not _is_trusted_proxy(hop):
+            return hop
+    return direct_peer
+
+
 def _rate_limited(
-    hits: dict[str, list[float]], client: str, limit: int, window: float
+    hits: dict[str, tuple[float, int]], client: str, limit: int, window: float
 ) -> bool:
-    """Fixed-window per-client limiter. In-memory, so per-worker: running
-    uvicorn with N workers multiplies the effective limit by N."""
+    """Fixed-window per-client limiter: one (window_start, count) pair per
+    client, not a growing timestamp list -- a flooding client can't inflate
+    its own bucket past O(1). In-memory, so per-worker: running uvicorn with
+    N workers multiplies the effective limit by N."""
     now = time.monotonic()
     if len(hits) > 1024:  # sweep stale buckets so unique IPs can't leak
-        for key, recent_hits in list(hits.items()):
-            if all(now - t >= window for t in recent_hits):
+        for key, (start, _) in list(hits.items()):
+            if now - start >= window:
                 del hits[key]
-    recent = [t for t in hits.get(client, []) if now - t < window]
-    recent.append(now)
-    hits[client] = recent
-    return len(recent) > limit
+    start, count = hits.get(client, (now, 0))
+    if now - start >= window:
+        start, count = now, 0
+    count += 1
+    hits[client] = (start, count)
+    return count > limit
 
 
 def _timezone_rate_limited(client: str) -> bool:
@@ -90,13 +136,48 @@ def _timezone_rate_limited(client: str) -> bool:
 # thread compiling at once.
 COMPILE_RATE_LIMIT = 10  # requests per window per client
 COMPILE_RATE_WINDOW = 60.0  # seconds
-_compile_hits: dict[str, list[float]] = {}
+_compile_hits: dict[str, tuple[float, int]] = {}
 MAX_CONCURRENT_COMPILES = 4
 _compile_semaphore = asyncio.Semaphore(MAX_CONCURRENT_COMPILES)
 
 
 def _compile_rate_limited(client: str) -> bool:
     return _rate_limited(_compile_hits, client, COMPILE_RATE_LIMIT, COMPILE_RATE_WINDOW)
+
+
+# Lightweight gate against scripts that hit /calculate or /download.pdf directly,
+# skipping the form entirely. GET / mints a token bound to the issuing client's IP;
+# the form carries it as a hidden field, and _result.html's form.items() echo
+# carries it on into the download form too, so one token covers both submissions
+# from a page load. The routes reject requests with no token, a token this process
+# never issued, or a token replayed from a different client. This is on top of,
+# not instead of, the per-client compile rate limit above -- it doesn't stop a
+# determined attacker (load the page once, replay the token from the same IP), it
+# blocks copy-pasted curl commands that never load the page at all, and tokens
+# leaked or copy-pasted to a different client.
+SESSION_TOKEN_TTL = 1800.0  # seconds; long enough to fill the form unhurried
+_session_tokens: dict[str, tuple[str, float]] = {}  # token -> (client, issued_at)
+
+
+def _issue_session_token(client: str) -> str:
+    if len(_session_tokens) > 4096:  # sweep stale, so the dict can't grow unbounded
+        now = time.monotonic()
+        for token, (_, issued_at) in list(_session_tokens.items()):
+            if now - issued_at >= SESSION_TOKEN_TTL:
+                del _session_tokens[token]
+    token = secrets.token_urlsafe(32)
+    _session_tokens[token] = (client, time.monotonic())
+    return token
+
+
+def _valid_session_token(token, client: str) -> bool:
+    if not token:
+        return False
+    entry = _session_tokens.get(token)
+    if entry is None:
+        return False
+    issued_client, issued_at = entry
+    return issued_client == client and time.monotonic() - issued_at < SESSION_TOKEN_TTL
 
 
 # calculate_namkha (skyfield astronomy) result cache. The typical flow submits the
@@ -108,16 +189,17 @@ def _compile_rate_limited(client: str) -> bool:
 # built from their primitive fields rather than the objects themselves.
 RESULT_CACHE_MAXSIZE = 256
 _result_cache: OrderedDict[tuple, nc.NamkhaCalculationResult] = OrderedDict()
+_result_cache_lock = threading.Lock()
 
 
-def _result_cache_key(namkha_request) -> tuple:
+def _result_cache_key(namkha_request: NamkhaRequest) -> tuple:
     subject = namkha_request.subject
     location = subject.birth_location
     return (
         subject.name,
         subject.gender,
         subject.birth_datetime,
-        str(subject.birth_timezone),
+        getattr(subject.birth_timezone, "zone", None) or str(subject.birth_timezone),
         location.latitude,
         location.longitude,
         location.name,
@@ -126,20 +208,26 @@ def _result_cache_key(namkha_request) -> tuple:
     )
 
 
-def _cached_calculate_namkha(namkha_request) -> nc.NamkhaCalculationResult:
+def _cached_calculate_namkha(
+    namkha_request: NamkhaRequest,
+) -> nc.NamkhaCalculationResult:
     key = _result_cache_key(namkha_request)
-    cached = _result_cache.get(key)
-    if cached is not None:
-        _result_cache.move_to_end(key)
-        return cached
+    with _result_cache_lock:
+        cached = _result_cache.get(key)
+        if cached is not None:
+            _result_cache.move_to_end(key)
+            return cached
     # Raises ValueError on bad input (method/type mismatch, unsupported birth
     # year); nothing is cached in that case since this line never returns.
+    # Runs outside the lock: concurrent misses on the same key may both
+    # compute (redundant work, not corruption) rather than block each other.
     result = nc.calculate_namkha(
         namkha_request.namkha_type, namkha_request.subject, namkha_request.method
     )
-    _result_cache[key] = result
-    if len(_result_cache) > RESULT_CACHE_MAXSIZE:
-        _result_cache.popitem(last=False)
+    with _result_cache_lock:
+        _result_cache[key] = result
+        if len(_result_cache) > RESULT_CACHE_MAXSIZE:
+            _result_cache.popitem(last=False)
     return result
 
 
@@ -166,6 +254,7 @@ async def index(request: Request):
             "prerelease_label": constants.PRERELEASE_LABEL,
             "current_year": datetime.now().year,
             "test_mode_enabled": TEST_MODE_ENABLED,
+            "session_token": _issue_session_token(_client_ip(request)),
         },
     )
 
@@ -194,11 +283,16 @@ def _result_response(
 
 @app.post("/calculate", response_class=HTMLResponse)
 async def calculate(request: Request):
-    client = request.client.host if request.client else "unknown"
+    client = _client_ip(request)
     if _compile_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
+    if not _valid_session_token(form.get("session_token"), client):
+        raise HTTPException(
+            status_code=403, detail="Session expired; reload the page and try again."
+        )
+
     try:
         namkha_request = build_request(form)
     except ValueError as exc:
@@ -207,7 +301,7 @@ async def calculate(request: Request):
 
     try:
         async with _compile_semaphore:
-            result = _cached_calculate_namkha(namkha_request)
+            result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             svg = await run_in_threadpool(render_svg, result)
     except ValueError as exc:
         return _result_response(
@@ -219,11 +313,16 @@ async def calculate(request: Request):
 
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
-    client = request.client.host if request.client else "unknown"
+    client = _client_ip(request)
     if _compile_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
+    if not _valid_session_token(form.get("session_token"), client):
+        raise HTTPException(
+            status_code=403, detail="Session expired; reload the page and try again."
+        )
+
     try:
         namkha_request = build_request(form)
     except ValueError as exc:
@@ -232,7 +331,7 @@ async def download_pdf(request: Request):
 
     try:
         async with _compile_semaphore:
-            result = _cached_calculate_namkha(namkha_request)
+            result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
         raise HTTPException(
@@ -254,10 +353,7 @@ async def timezone_lookup(
     longitude: float = Query(ge=-180, le=180, allow_inf_nan=False),
 ):
     """IANA time zone for a coordinate; used by the form to auto-fill the zone."""
-    # Single process / direct connection assumed: client.host is the real peer.
-    # Behind a proxy this would collapse all users into one bucket -- read the
-    # first X-Forwarded-For hop instead (only if the proxy is trusted).
-    client = request.client.host if request.client else "unknown"
+    client = _client_ip(request)
     if _timezone_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
     # Round to ~110m: finer than any time zone boundary, lifts the cache hit rate.

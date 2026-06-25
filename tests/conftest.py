@@ -30,10 +30,16 @@ def client():
 def fixture_form():
     """Load tests/fixtures/<name>.json into a dict. Fixtures carry a `location_name`
     label (the Photon place name); build_request reads named keys only, so the dict
-    passes straight through untouched."""
+    passes straight through untouched. Also mints a valid session_token (see
+    main._issue_session_token), since /calculate and /download.pdf now require one
+    -- routes calling this fixture are testing calculation behavior, not the gate
+    itself, so a real token keeps that gate out of their way. Tokens are bound to
+    the issuing client's IP; TestClient's direct peer is always "testclient"."""
 
     def load(name):
-        return json.loads((FIXTURES_DIR / f"{name}.json").read_text())
+        data = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
+        data["session_token"] = main._issue_session_token("testclient")
+        return data
 
     return load
 
@@ -191,3 +197,12 @@ def _reset_result_cache():
     main._result_cache.clear()
     yield
     main._result_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_session_tokens():
+    """Tokens minted by GET / (see main._issue_session_token) are also
+    process-global state; reset them around every test."""
+    main._session_tokens.clear()
+    yield
+    main._session_tokens.clear()
