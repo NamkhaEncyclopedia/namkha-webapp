@@ -215,7 +215,7 @@
                 <div>
                   <label for="timezone-ui">Birth time zone:</label>
                   <select id="timezone-ui" class="input-text" x-model="timezone" :disabled="!manualTimezone">
-                    {% for tz in timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+                    {% for value, label in timezones %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
                   </select>
                   <input type="hidden" name="timezone" :value="timezone">
                 </div>

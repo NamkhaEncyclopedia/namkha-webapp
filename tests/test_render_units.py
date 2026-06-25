@@ -231,14 +231,14 @@ def test_utc_offset_sub_hour(make_request):
 def test_utc_offset_whole_hour(make_request):
     # 1985-03-15 is before European DST began that year -> CET (+1).
     subject = make_request(timezone="Europe/Berlin").subject
-    assert _utc_offset(subject) == "(UTC+1)"
+    assert _utc_offset(subject) == "(UTC+1:00)"
 
 
 def test_utc_offset_negative(make_request):
     # 1985-03-15 is before US DST began that year -> EST (-5); exercises the
     # sign="-" branch, untouched by the two positive-offset cases above.
     subject = make_request(timezone="America/New_York").subject
-    assert _utc_offset(subject) == "(UTC-5)"
+    assert _utc_offset(subject) == "(UTC-5:00)"
 
 
 # --- _sanitize_svg: defense-in-depth before embedding as raw HTML -----------------

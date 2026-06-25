@@ -250,7 +250,7 @@ def _utc_offset(subject) -> str:
     total = int(aware.utcoffset().total_seconds())
     sign = "+" if total >= 0 else "-"
     h, m = divmod(abs(total), 3600)
-    return f"(UTC{sign}{h}" + (f":{m // 60:02d}" if m else "") + ")"
+    return f"(UTC{sign}{h}:{m // 60:02d})"
 
 
 def _build_data(result) -> dict:
@@ -289,9 +289,11 @@ def _build_data(result) -> dict:
                 "conflicted": bool(harmonized_aspect.is_conflicted),
             }
         )
+    utc_offset = _utc_offset(subject)
+    utc_offset_plain = utc_offset[1:-1]
     birth_text = (
         f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
-        f"{subject.birth_timezone} {_utc_offset(subject)}"
+        f"{utc_offset_plain} ({subject.birth_timezone})"
     )
     return {
         "subject": {
@@ -302,7 +304,7 @@ def _build_data(result) -> dict:
         },
         "meta": {
             "type": result.namkha_type.name.title(),
-            "method": {"CLASSIC": "Classic", "CNNR": "CNNR"}.get(
+            "method": {"CLASSIC": "Classic", "CNNR": "C. N. Norbu"}.get(
                 result.calculation_method.name, result.calculation_method.name
             ),
             "birth_element": result.birth_element.value,

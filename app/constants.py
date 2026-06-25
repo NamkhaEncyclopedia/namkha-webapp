@@ -3,6 +3,7 @@
 import importlib.metadata
 import re
 import tomllib
+from datetime import datetime
 from pathlib import Path
 
 import namkha_calculator as nc
@@ -91,9 +92,22 @@ GENDERS = [(gender.name, gender.name.title()) for gender in nc.Gender]
 NAMKHA_TYPES = [
     (namkha_type.name, namkha_type.name.title()) for namkha_type in nc.NamkhaType
 ]
-METHOD_LABELS = {"CLASSIC": "Classic", "CNNR": "CNNR"}
+METHOD_LABELS = {"CLASSIC": "Classic", "CNNR": "C. N. Norbu"}
 METHODS = [
     (method.name, METHOD_LABELS.get(method.name, method.name.title()))
     for method in nc.CalculationMethod
 ]
-TIMEZONES = pytz.common_timezones
+
+
+def _tz_label(zone_name: str) -> str:
+    """e.g. 'UTC+5:45 (Asia/Kathmandu)'. Offset is the CURRENT one (DST included
+    if in effect now) -- a display hint in the dropdown, not the offset used for
+    the actual birth date, which the render computes separately."""
+    aware_now = datetime.now(pytz.timezone(zone_name))
+    total = int(aware_now.utcoffset().total_seconds())  # type: ignore[union-attr]
+    sign = "+" if total >= 0 else "-"
+    hours, seconds = divmod(abs(total), 3600)
+    return f"UTC{sign}{hours}:{seconds // 60:02d} ({zone_name})"
+
+
+TIMEZONES = [(zone, _tz_label(zone)) for zone in pytz.common_timezones]
