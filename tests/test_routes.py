@@ -79,6 +79,66 @@ def test_download_pdf_error_is_400(client, fixture_form):
     assert "Switch the calculation method to Classic." in response.json()["detail"]
 
 
+# --- calculate_namkha result cache --------------------------------------------------
+
+
+def test_download_pdf_reuses_calculate_result(client, fixture_form, monkeypatch):
+    """The typical flow hits /calculate then /download.pdf with the same form;
+    the second call should skip recomputing calculate_namkha (skyfield), only
+    redoing the Typst compile (different output format, can't be shared)."""
+    calls = []
+    original = main.nc.calculate_namkha
+
+    def counting_calculate(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(main.nc, "calculate_namkha", counting_calculate)
+
+    form = fixture_form("year_classic_berlin")
+    assert client.post("/calculate", data=form).status_code == 200
+    assert client.post("/download.pdf", data=form).status_code == 200
+    assert len(calls) == 1
+
+
+def test_calculate_namkha_cache_distinguishes_inputs(client, fixture_form):
+    form_a = fixture_form("year_classic_berlin")
+    form_b = dict(form_a)
+    form_b["name"] = "Someone Else"
+
+    assert client.post("/calculate", data=form_a).status_code == 200
+    assert client.post("/calculate", data=form_b).status_code == 200
+    assert len(main._result_cache) == 2
+
+
+# --- /calculate, /download.pdf rate limit ------------------------------------------
+
+
+def test_compile_rate_limited_pure_function():
+    client_id = "203.0.113.8"
+    under_limit = [
+        main._compile_rate_limited(client_id) for _ in range(main.COMPILE_RATE_LIMIT)
+    ]
+    assert not any(under_limit)
+    assert main._compile_rate_limited(client_id) is True
+
+
+def test_calculate_http_429_after_limit(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    response = None
+    for _ in range(main.COMPILE_RATE_LIMIT + 1):
+        response = client.post("/calculate", data=form)
+    assert response.status_code == 429
+
+
+def test_download_pdf_http_429_after_limit(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    response = None
+    for _ in range(main.COMPILE_RATE_LIMIT + 1):
+        response = client.post("/download.pdf", data=form)
+    assert response.status_code == 429
+
+
 # --- _userfriendly_calculation_error ----------------------------------------------
 
 

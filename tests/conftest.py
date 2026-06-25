@@ -173,3 +173,21 @@ def _reset_timezone_state():
     yield
     main._timezone_hits.clear()
     main._cached_timezone.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_compile_rate_limit_state():
+    """The /calculate and /download.pdf limiter shares the same kind of
+    process-global state as /timezone; reset it around every test."""
+    main._compile_hits.clear()
+    yield
+    main._compile_hits.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_result_cache():
+    """The calculate_namkha result cache shared by /calculate and /download.pdf
+    is also process-global; reset it around every test."""
+    main._result_cache.clear()
+    yield
+    main._result_cache.clear()

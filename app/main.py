@@ -1,8 +1,10 @@
 """FastAPI app: form -> calculate_namkha -> (Typst sheet <- inline SVG) -> PDF."""
 
+import asyncio
 import json
 import os
 import time
+from collections import OrderedDict
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -59,19 +61,86 @@ def _cached_timezone(latitude: float, longitude: float) -> str | None:
         return None
 
 
-def _timezone_rate_limited(client: str) -> bool:
+def _rate_limited(
+    hits: dict[str, list[float]], client: str, limit: int, window: float
+) -> bool:
     """Fixed-window per-client limiter. In-memory, so per-worker: running
     uvicorn with N workers multiplies the effective limit by N."""
     now = time.monotonic()
-    if len(_timezone_hits) > 1024:  # sweep stale buckets so unique IPs can't leak
-        for key, hits in list(_timezone_hits.items()):
-            if all(now - t >= TIMEZONE_RATE_WINDOW for t in hits):
-                del _timezone_hits[key]
-    window = _timezone_hits.get(client, [])
-    recent = [t for t in window if now - t < TIMEZONE_RATE_WINDOW]
+    if len(hits) > 1024:  # sweep stale buckets so unique IPs can't leak
+        for key, recent_hits in list(hits.items()):
+            if all(now - t >= window for t in recent_hits):
+                del hits[key]
+    recent = [t for t in hits.get(client, []) if now - t < window]
     recent.append(now)
-    _timezone_hits[client] = recent
-    return len(recent) > TIMEZONE_RATE_LIMIT
+    hits[client] = recent
+    return len(recent) > limit
+
+
+def _timezone_rate_limited(client: str) -> bool:
+    return _rate_limited(
+        _timezone_hits, client, TIMEZONE_RATE_LIMIT, TIMEZONE_RATE_WINDOW
+    )
+
+
+# /calculate and /download.pdf abuse protection. Unlike /timezone (an in-memory
+# boundary search), these run skyfield's calculation plus a full Typst compile --
+# real CPU cost per request. Same per-client fixed window, separate bucket, plus
+# a process-wide concurrency cap so a handful of clients can't pin every worker
+# thread compiling at once.
+COMPILE_RATE_LIMIT = 10  # requests per window per client
+COMPILE_RATE_WINDOW = 60.0  # seconds
+_compile_hits: dict[str, list[float]] = {}
+MAX_CONCURRENT_COMPILES = 4
+_compile_semaphore = asyncio.Semaphore(MAX_CONCURRENT_COMPILES)
+
+
+def _compile_rate_limited(client: str) -> bool:
+    return _rate_limited(_compile_hits, client, COMPILE_RATE_LIMIT, COMPILE_RATE_WINDOW)
+
+
+# calculate_namkha (skyfield astronomy) result cache. The typical flow submits the
+# same form twice -- /calculate for the preview, then /download.pdf for the file --
+# and without this both runs redo the astronomy from scratch. The Typst compile
+# itself still runs twice (SVG vs. PDF are different output formats, nothing to
+# share there); this only saves the calculation in between.
+# `nc.Subject`/`Location` aren't hashable (not frozen dataclasses), so the key is
+# built from their primitive fields rather than the objects themselves.
+RESULT_CACHE_MAXSIZE = 256
+_result_cache: OrderedDict[tuple, nc.NamkhaCalculationResult] = OrderedDict()
+
+
+def _result_cache_key(namkha_request) -> tuple:
+    subject = namkha_request.subject
+    location = subject.birth_location
+    return (
+        subject.name,
+        subject.gender,
+        subject.birth_datetime,
+        str(subject.birth_timezone),
+        location.latitude,
+        location.longitude,
+        location.name,
+        namkha_request.namkha_type,
+        namkha_request.method,
+    )
+
+
+def _cached_calculate_namkha(namkha_request) -> nc.NamkhaCalculationResult:
+    key = _result_cache_key(namkha_request)
+    cached = _result_cache.get(key)
+    if cached is not None:
+        _result_cache.move_to_end(key)
+        return cached
+    # Raises ValueError on bad input (method/type mismatch, unsupported birth
+    # year); nothing is cached in that case since this line never returns.
+    result = nc.calculate_namkha(
+        namkha_request.namkha_type, namkha_request.subject, namkha_request.method
+    )
+    _result_cache[key] = result
+    if len(_result_cache) > RESULT_CACHE_MAXSIZE:
+        _result_cache.popitem(last=False)
+    return result
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -125,6 +194,10 @@ def _result_response(
 
 @app.post("/calculate", response_class=HTMLResponse)
 async def calculate(request: Request):
+    client = request.client.host if request.client else "unknown"
+    if _compile_rate_limited(client):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     form = await request.form()
     try:
         namkha_request = build_request(form)
@@ -133,10 +206,9 @@ async def calculate(request: Request):
         return _result_response(request, form, error=str(exc))
 
     try:
-        result = nc.calculate_namkha(
-            namkha_request.namkha_type, namkha_request.subject, namkha_request.method
-        )
-        svg = await run_in_threadpool(render_svg, result)
+        async with _compile_semaphore:
+            result = _cached_calculate_namkha(namkha_request)
+            svg = await run_in_threadpool(render_svg, result)
     except ValueError as exc:
         return _result_response(
             request, form, error=_userfriendly_calculation_error(exc)
@@ -147,6 +219,10 @@ async def calculate(request: Request):
 
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
+    client = request.client.host if request.client else "unknown"
+    if _compile_rate_limited(client):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     form = await request.form()
     try:
         namkha_request = build_request(form)
@@ -155,10 +231,9 @@ async def download_pdf(request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        result = nc.calculate_namkha(
-            namkha_request.namkha_type, namkha_request.subject, namkha_request.method
-        )
-        pdf = await run_in_threadpool(render_pdf, result)
+        async with _compile_semaphore:
+            result = _cached_calculate_namkha(namkha_request)
+            pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
         raise HTTPException(
             status_code=400, detail=_userfriendly_calculation_error(exc)
