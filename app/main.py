@@ -3,11 +3,13 @@
 import asyncio
 import ipaddress
 import json
+import logging
 import os
 import secrets
 import threading
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -22,6 +24,8 @@ from starlette.concurrency import run_in_threadpool
 from app import constants
 from app.calculation_render import render_pdf, render_svg
 from app.forms import FIELDS, NamkhaRequest, build_request
+
+logger = logging.getLogger(__name__)
 
 BASE = Path(__file__).parent
 
@@ -139,10 +143,28 @@ COMPILE_RATE_WINDOW = 60.0  # seconds
 _compile_hits: dict[str, tuple[float, int]] = {}
 MAX_CONCURRENT_COMPILES = 4
 _compile_semaphore = asyncio.Semaphore(MAX_CONCURRENT_COMPILES)
+COMPILE_CONTENTION_LOG_THRESHOLD = 0.5  # seconds; below this, waiting is unremarkable
 
 
 def _compile_rate_limited(client: str) -> bool:
     return _rate_limited(_compile_hits, client, COMPILE_RATE_LIMIT, COMPILE_RATE_WINDOW)
+
+
+@asynccontextmanager
+async def _compile_slot(route: str):
+    """Acquire the shared compile semaphore, logging how long the request waited.
+    `asyncio.Semaphore` doesn't expose wait time directly, so it's measured with
+    a wall clock around the acquire rather than reaching into private attrs."""
+    wait_start = time.monotonic()
+    async with _compile_semaphore:
+        waited = time.monotonic() - wait_start
+        if waited > COMPILE_CONTENTION_LOG_THRESHOLD:
+            logger.warning(
+                "%s: waited %.2fs for compile slot (contention)", route, waited
+            )
+        else:
+            logger.debug("%s: waited %.3fs for compile slot", route, waited)
+        yield
 
 
 # Lightweight gate against scripts that hit /calculate or /download.pdf directly,
@@ -216,7 +238,9 @@ def _cached_calculate_namkha(
         cached = _result_cache.get(key)
         if cached is not None:
             _result_cache.move_to_end(key)
+            logger.debug("result cache hit (size=%d)", len(_result_cache))
             return cached
+    logger.debug("result cache miss (size=%d)", len(_result_cache))
     # Raises ValueError on bad input (method/type mismatch, unsupported birth
     # year); nothing is cached in that case since this line never returns.
     # Runs outside the lock: concurrent misses on the same key may both
@@ -285,6 +309,7 @@ def _result_response(
 async def calculate(request: Request):
     client = _client_ip(request)
     if _compile_rate_limited(client):
+        logger.warning("compile rate limit exceeded for %s on /calculate", client)
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
@@ -300,7 +325,7 @@ async def calculate(request: Request):
         return _result_response(request, form, error=str(exc))
 
     try:
-        async with _compile_semaphore:
+        async with _compile_slot("/calculate"):
             result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             svg = await run_in_threadpool(render_svg, result)
     except ValueError as exc:
@@ -315,6 +340,7 @@ async def calculate(request: Request):
 async def download_pdf(request: Request):
     client = _client_ip(request)
     if _compile_rate_limited(client):
+        logger.warning("compile rate limit exceeded for %s on /download.pdf", client)
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
@@ -330,7 +356,7 @@ async def download_pdf(request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        async with _compile_semaphore:
+        async with _compile_slot("/download.pdf"):
             result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
