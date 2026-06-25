@@ -13,6 +13,7 @@ from app.calculation_render import (
     _band_colors,
     _diamond_geometry,
     _element_color,
+    _fill_bands,
     _layout,
     _sanitize_svg,
     _set_fill,
@@ -123,6 +124,45 @@ def test_diamond_geometry(d):
     assert _diamond_geometry(path) == (10.0, 10.0, 10.0, 10.0)
 
 
+# --- _fill_bands: one polygon per color, innermost = colors[0] --------------------
+
+# center diamond (rx=ry=5) inside an outer frame (rx=ry=10), same center.
+_CENTER_PATH = '<path d="M 10 5 L 15 10 L 10 15 L 5 10 Z"/>'
+_OUTER_PATH = '<path d="M 10 0 L 20 10 L 10 20 L 0 10 Z"/>'
+
+
+def _band_group(center_d, outer_d, colors):
+    group = etree.Element(f"{{{SVG_NS}}}g")
+    _fill_bands(
+        group,
+        etree.fromstring(center_d),
+        etree.fromstring(outer_d),
+        colors,
+    )
+    return group.findall(f"{{{SVG_NS}}}polygon")
+
+
+def _right_extent(polygon):
+    """Rightmost x of a band polygon == cx + rx, so it orders bands inner->outer."""
+    return max(float(point.split(",")[0]) for point in polygon.get("points").split())
+
+
+def test_fill_bands_one_polygon_per_color_innermost_first():
+    colors = ["#111111", "#222222", "#333333"]
+    polygons = _band_group(_CENTER_PATH, _OUTER_PATH, colors)
+    assert len(polygons) == len(colors)
+    inner_to_outer = sorted(polygons, key=_right_extent)
+    assert inner_to_outer[0].get("fill") == colors[0]  # innermost = colors[0]
+    assert inner_to_outer[-1].get("fill") == colors[-1]  # outermost = colors[-1]
+    # Bands stay within [center extent, outer extent] and centered on the frame.
+    assert _right_extent(inner_to_outer[0]) > 15.0  # outside the center diamond
+    assert _right_extent(inner_to_outer[-1]) == pytest.approx(20.0)  # the outer frame
+
+
+def test_fill_bands_noop_on_empty_colors():
+    assert _band_group(_CENTER_PATH, _OUTER_PATH, []) == []
+
+
 # --- _set_fill: rewrites fill inside the style attribute --------------------------
 
 
@@ -192,6 +232,13 @@ def test_utc_offset_whole_hour(make_request):
     # 1985-03-15 is before European DST began that year -> CET (+1).
     subject = make_request(timezone="Europe/Berlin").subject
     assert _utc_offset(subject) == "(UTC+1)"
+
+
+def test_utc_offset_negative(make_request):
+    # 1985-03-15 is before US DST began that year -> EST (-5); exercises the
+    # sign="-" branch, untouched by the two positive-offset cases above.
+    subject = make_request(timezone="America/New_York").subject
+    assert _utc_offset(subject) == "(UTC-5)"
 
 
 # --- _sanitize_svg: defense-in-depth before embedding as raw HTML -----------------
