@@ -24,7 +24,29 @@ package-mode = false
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^4.0"
 mypy = "^1.14"
-httpx2 = "^2.4.0"
+pytest = "^8.0"         # also pulled into the browser group via pytest-playwright, which
+                        # caps it (<9). Shared version: a pytest major bump must clear both
+                        # groups or `poetry lock` fails, even though browser is opt-in.
+httpx = ">=0.27"        # required by Starlette's TestClient (it does `import httpx`)
+
+# Browser E2E layer, opt-in and ADDITIVE on top of dev (reuses dev's pytest). Supported installs:
+#   poetry install                  -> backend suite (dev: pytest + httpx)
+#   poetry install --with browser   -> backend + browser (+ `playwright install chromium`)
+# `--only browser` is unsupported: it drops main + httpx, but tests/conftest.py imports
+# starlette.testclient (needs httpx) for every test, so collection errors.
+[tool.poetry.group.browser]
+optional = true
+
+[tool.poetry.group.browser.dependencies]
+pytest-playwright = "^0.5"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]      # repo root, so `import app` works (package-mode = false, no install)
+addopts = "--strict-markers"
+markers = [
+    "browser: end-to-end tests that drive a real browser via Playwright (opt-in)",
+]
 
 [tool.ruff]
 target-version = "py313"

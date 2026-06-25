@@ -20,6 +20,7 @@ FIELDS = (
     "gender",
     "birth_date",
     "birth_time",
+    "location_name",
     "timezone",
     "latitude",
     "longitude",
@@ -61,8 +62,13 @@ def build_request(form) -> NamkhaRequest:
     except ValueError as exc:
         raise ValueError("Latitude and longitude must be numbers.") from exc
 
+    # `location_name` is the place field text: the autocomplete label, or whatever
+    # the user typed in manual-coordinate mode. Blank -> no name (bare coordinates).
+    place_name = (form.get("location_name") or "").strip() or None
     try:
-        birth_location = nc.Location(latitude=latitude, longitude=longitude)
+        birth_location = nc.Location(
+            latitude=latitude, longitude=longitude, name=place_name
+        )
     except ValueError as exc:
         raise ValueError(
             "Latitude must be between -90 and 90, longitude between -180 and 180."

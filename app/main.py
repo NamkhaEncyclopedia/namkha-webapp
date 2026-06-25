@@ -136,7 +136,7 @@ async def calculate(request: Request):
         result = nc.calculate_namkha(
             namkha_request.namkha_type, namkha_request.subject, namkha_request.method
         )
-        svg = await run_in_threadpool(render_svg, result, namkha_request)
+        svg = await run_in_threadpool(render_svg, result)
     except ValueError as exc:
         return _result_response(
             request, form, error=_userfriendly_calculation_error(exc)
@@ -158,7 +158,7 @@ async def download_pdf(request: Request):
         result = nc.calculate_namkha(
             namkha_request.namkha_type, namkha_request.subject, namkha_request.method
         )
-        pdf = await run_in_threadpool(render_pdf, result, namkha_request)
+        pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
         raise HTTPException(
             status_code=400, detail=_userfriendly_calculation_error(exc)

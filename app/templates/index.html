@@ -138,10 +138,10 @@
                   id="place"
                   class="input-text"
                   autocomplete="off"
-                  placeholder="Start typing a city…"
-                  role="combobox"
-                  aria-controls="place-listbox"
-                  aria-autocomplete="list"
+                  :placeholder="manualCoords ? 'Place name (optional)' : 'Start typing a place…'"
+                  :role="manualCoords ? null : 'combobox'"
+                  :aria-controls="manualCoords ? null : 'place-listbox'"
+                  :aria-autocomplete="manualCoords ? null : 'list'"
                   :aria-expanded="suggestions.length > 0"
                   :aria-activedescendant="activeIndex >= 0 ? 'place-option-' + activeIndex : null"
                   x-model="placeQuery"
@@ -151,6 +151,8 @@
                 >
                 <span class="spinner place-spinner" role="status" aria-label="Searching places" x-show="isSearchingPlaces" x-cloak></span>
               </div>
+              <!-- Place field text submits as the location name (both modes). -->
+              <input type="hidden" name="location_name" :value="placeQuery">
               <ul class="suggestion-list" id="place-listbox" role="listbox" x-show="suggestions.length" x-cloak>
                 <template x-for="(suggestion, index) in suggestions" :key="suggestion.label + suggestion.lat">
                   <li
@@ -321,6 +323,8 @@
         timezone: '',
 
         async searchPlaces() {
+          // Manual-coordinate mode turns the place field into a plain text input.
+          if (this.manualCoords) { this.suggestions = []; return; }
           this.activeIndex = -1;
           this.placesError = '';
           const query = this.placeQuery.trim();
@@ -434,16 +438,15 @@
           document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
         },
 
-        // Test-mode only: apply a tests/fixtures/*.json fixture (same field
-        // names as app/forms.py FIELDS, plus a `city` label not submitted by
-        // build_request -- shown in the place field for context only) to the
-        // form, same fields resetForm() clears.
+        // Test-mode only: apply a tests/fixtures/*.json fixture (field names
+        // match app/forms.py FIELDS; `location_name` fills the place field, which
+        // submits as the location name) to the form, same fields resetForm() clears.
         applyFixture(data) {
           Object.assign(this, {
             method: data.method,
             namkhaType: data.namkha_type,
             gender: data.gender,
-            placeQuery: data.city || '',
+            placeQuery: data.location_name || '',
             suggestions: [],
             activeIndex: -1,
             manualCoords: true,

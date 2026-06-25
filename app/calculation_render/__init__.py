@@ -215,14 +215,14 @@ def _band_colors(aspect, harmonized_aspect, mewa: int | None) -> list[str]:
     return sequence
 
 
-def fill_illustration(result, request) -> str:
+def fill_illustration(result) -> str:
     """Color the blank Namkha illustration from the result. Each rhombus
     is filled with concentric harmonization bands; the center diamond (aspect
     center element) and the outer frame (last/outermost color) sit on top. Side
     rhombi + labels follow gender. Returns SVG code."""
     tree = etree.parse(str(SVG_TEMPLATE))
     root = tree.getroot()
-    positions, labels = _layout(request.subject.gender)
+    positions, labels = _layout(result.subject.gender)
     by_aspect = {h.name: h for h in result.harmonized_aspects}
     for pos, aspect in positions.items():
         harmonized_aspect = by_aspect[aspect]
@@ -253,9 +253,9 @@ def _utc_offset(subject) -> str:
     return f"(UTC{sign}{h}" + (f":{m // 60:02d}" if m else "") + ")"
 
 
-def _build_data(result, request) -> dict:
+def _build_data(result) -> dict:
     """Text fields for the Typst layout (everything that isn't color)."""
-    subject = request.subject
+    subject = result.subject
     location = subject.birth_location
     coords = f"{location.latitude:.4f}, {location.longitude:.4f}"
     location_text = f"{location.name} ({coords})" if location.name else coords
@@ -301,9 +301,9 @@ def _build_data(result, request) -> dict:
             "location": location_text,
         },
         "meta": {
-            "type": request.namkha_type.name.title(),
+            "type": result.namkha_type.name.title(),
             "method": {"CLASSIC": "Classic", "CNNR": "CNNR"}.get(
-                request.method.name, request.method.name
+                result.calculation_method.name, result.calculation_method.name
             ),
             "birth_element": result.birth_element.value,
             "birth_animal": result.birth_animal.value,
@@ -316,12 +316,12 @@ def _build_data(result, request) -> dict:
 
 
 @contextmanager
-def _compile_tmpdir(result, request):
+def _compile_tmpdir(result):
     """Fill SVG + data into a per-request tmpdir holding sheet.typ, ready to
     compile. image()/json() resolve relative to the .typ file, so the
     template, data, and illustration all live together here."""
-    svg = fill_illustration(result, request)
-    data = _build_data(result, request)
+    svg = fill_illustration(result)
+    data = _build_data(result)
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
         (tmpdir / "namkha.svg").write_text(svg, encoding="utf-8")
@@ -333,9 +333,9 @@ def _compile_tmpdir(result, request):
         yield tmpdir
 
 
-def render_pdf(result, request) -> bytes:
+def render_pdf(result) -> bytes:
     """Typst always returns single `bytes` for PDF, regardless of page count."""
-    with _compile_tmpdir(result, request) as tmpdir:
+    with _compile_tmpdir(result) as tmpdir:
         return typst.compile(
             str(tmpdir / "sheet.typ"),
             root=str(tmpdir),
@@ -371,12 +371,12 @@ def _sanitize_svg(svg: bytes) -> bytes:
     return etree.tostring(root)
 
 
-def render_svg(result, request) -> str:
+def render_svg(result) -> str:
     """Inline view. Typst returns single bytes for a one-page sheet, a list of
     per-page bytes otherwise; normalized to a list here so every page is
     stacked and nothing is truncated. Each page is sanitized before
     embedding, since the result template marks this output `| safe` (raw HTML)."""
-    with _compile_tmpdir(result, request) as tmpdir:
+    with _compile_tmpdir(result) as tmpdir:
         out = typst.compile(
             str(tmpdir / "sheet.typ"),
             root=str(tmpdir),
