@@ -28,10 +28,17 @@
     ty = Math.min(maxY, Math.max(-maxY, ty));
   }
 
+  // Zoom is driven by actual width/height, not a CSS transform: scale(). A
+  // scale() transform reuses the layer's rasterized-at-1x bitmap and stretches
+  // it, blurring vector content (SVG text/paths) well before MAX_SCALE. Resizing
+  // instead makes the SVG re-render at the true target resolution, so it stays
+  // crisp at any zoom. Only pan uses transform: translate().
   function apply() {
     if (!content) return;
     clampTranslate();
-    content.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+    content.style.width = (baseW * scale) + 'px';
+    content.style.height = (baseH * scale) + 'px';
+    content.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
   }
 
   // Zoom to newScale keeping the content point under (px, py) fixed, where
@@ -63,9 +70,13 @@
     overlay.setAttribute('data-open', '');
     overlay.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    // Measure at scale 1 for the pan bounds.
+    // Measure at scale 1 (still under the CSS max-width/max-height cap) for the
+    // pan bounds, then switch sizing over to explicit width/height so zooming
+    // past that cap isn't clipped by it.
     const r = content.getBoundingClientRect();
     baseW = r.width; baseH = r.height;
+    content.style.maxWidth = 'none';
+    content.style.maxHeight = 'none';
     apply();
     focusable[0].focus();
   }
