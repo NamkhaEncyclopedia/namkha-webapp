@@ -25,13 +25,26 @@ from starlette.concurrency import run_in_threadpool
 
 from app import constants
 from app.calculation_render import render_pdf, render_svg
+from app.event_log import configure_logging, log_event
 from app.forms import FIELDS, NamkhaRequest, build_request
 
 logger = logging.getLogger(__name__)
 
 BASE = Path(__file__).parent
 
-app = FastAPI(title="Namkha Calculator Web")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Start the non-blocking log listener on boot, stop it on shutdown so its
+    background thread drains and exits cleanly."""
+    listener = configure_logging()
+    try:
+        yield
+    finally:
+        listener.stop()
+
+
+app = FastAPI(title="Namkha Calculator Web", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
@@ -322,6 +335,14 @@ async def calculate(request: Request):
         namkha_request = build_request(form)
     except ValueError as exc:
         # build_request only raises ValueErrors with user-facing messages.
+        log_event(
+            logger,
+            "/calculate",
+            form,
+            outcome="reject",
+            error=str(exc),
+            level=logging.WARNING,
+        )
         return _result_response(request, form, error=str(exc))
 
     try:
@@ -329,10 +350,31 @@ async def calculate(request: Request):
             result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             svg = await run_in_threadpool(render_svg, result)
     except ValueError as exc:
+        log_event(
+            logger,
+            "/calculate",
+            form,
+            outcome="fail",
+            error=str(exc),
+            level=logging.ERROR,
+        )
         return _result_response(
             request, form, error=_userfriendly_calculation_error(exc)
         )
+    except Exception as exc:
+        # Unexpected failure (e.g. a Typst compile error): log with form context,
+        # then re-raise unchanged so the 500 response is exactly as before.
+        log_event(
+            logger,
+            "/calculate",
+            form,
+            outcome="error",
+            error=repr(exc),
+            level=logging.ERROR,
+        )
+        raise
 
+    log_event(logger, "/calculate", form, outcome="ok", result=result)
     return _result_response(request, form, svg=svg)
 
 
@@ -387,6 +429,14 @@ async def download_pdf(request: Request):
         namkha_request = build_request(form)
     except ValueError as exc:
         # build_request only raises ValueErrors with user-facing messages.
+        log_event(
+            logger,
+            "/download.pdf",
+            form,
+            outcome="reject",
+            error=str(exc),
+            level=logging.WARNING,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
@@ -394,9 +444,31 @@ async def download_pdf(request: Request):
             result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
+        log_event(
+            logger,
+            "/download.pdf",
+            form,
+            outcome="fail",
+            error=str(exc),
+            level=logging.ERROR,
+        )
         raise HTTPException(
             status_code=400, detail=_userfriendly_calculation_error(exc)
         ) from exc
+    except Exception as exc:
+        # Unexpected failure (e.g. a Typst compile error): log with form context,
+        # then re-raise unchanged so the 500 response is exactly as before.
+        log_event(
+            logger,
+            "/download.pdf",
+            form,
+            outcome="error",
+            error=repr(exc),
+            level=logging.ERROR,
+        )
+        raise
+
+    log_event(logger, "/download.pdf", form, outcome="ok", result=result)
     return Response(
         content=pdf,
         media_type="application/pdf",
