@@ -5,9 +5,9 @@
 
 ---
 Web app for calculating a [Namkha thread-cross](https://en.wikipedia.org/wiki/Namkha)
-colour scheme in the tradition of [Chögyal Namkhai Norbu Rinpoche](https://en.wikipedia.org/wiki/Namkhai_Norbu).
+color scheme in the tradition of [Chögyal Namkhai Norbu Rinpoche](https://en.wikipedia.org/wiki/Namkhai_Norbu).
 Enter the date, time, and place of birth; the app computes the harmonization of the
-elements and renders a sheet with the colour table and a thread-cross illustration,
+elements and renders a sheet with the color table and a thread-cross illustration,
 shown in the browser and downloadable as a printable PDF.
 
 All calculations are done by the
@@ -22,7 +22,7 @@ library.
 - [Running the app](#running-the-app)
 - [Testing](#testing)
 - [Development](#development)
-- [Licence](#licence)
+- [License](#license)
 
 ## Development status
 
@@ -52,7 +52,7 @@ Server-side Python, server-rendered HTML.
   own ephemeris and time zone data, so results do not depend on the host system.
 - **Sheet rendering** – [Typst](https://typst.app/) (via the `typst` Python package)
   compiles one document to both PDF and SVG. The thread-cross illustration is a
-  hand-drawn SVG template that the code fills in per request – colouring regions and
+  hand-drawn SVG template that the code fills in per request – coloring regions and
   writing labels by element id – and Typst embeds it in the sheet.
 - **Frontend** – [HTMX](https://htmx.org/) swaps the calculation result into the
   page; [Alpine.js](https://alpinejs.dev/) drives the form behavior (field gating,
@@ -104,7 +104,7 @@ Note: the illustration SVG is maintained as code – automatic SVG optimizers ar
 deliberately not used, because the render code depends on element ids that they
 would strip.
 
-## Licence
+## License
 
 Licensed under the GNU General Public License, version 3 or later
 (GPL-3.0-or-later). See [LICENSE](LICENSE).
