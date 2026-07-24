@@ -187,7 +187,7 @@ def test_deep_water_center_color_name(make_result, make_aspect, default_aspects)
 def test_render_svg_stacks_multiple_sanitized_pages(fixture_form):
     result = _real(fixture_form, "year_classic_berlin")
     svg = render_svg(result)
-    assert svg.count('<div class="page">') >= 2  # 2-page sheet -> list-stacking path
+    assert svg.count('<div class="page"') >= 2  # 2-page sheet -> list-stacking path
     assert "<script" not in svg
 
 

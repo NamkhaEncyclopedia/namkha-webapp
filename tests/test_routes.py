@@ -25,7 +25,7 @@ def test_favicon_redirects(client):
 def test_calculate_happy(client, fixture_form):
     response = client.post("/calculate", data=fixture_form("year_classic_berlin"))
     assert response.status_code == 200
-    assert '<div class="page">' in response.text
+    assert '<div class="page"' in response.text
 
 
 def test_calculate_parse_error_shows_banner(client, fixture_form):

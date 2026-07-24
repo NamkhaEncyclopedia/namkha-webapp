@@ -689,33 +689,30 @@ button.download-link:hover { background: var(--download-button-hover-bg); }
   flex-direction: column;
   gap: 1.5rem;
 }
+/* Each page is a button: tap/click (or Enter/Space) opens the zoom lightbox.
+   The A4 sheet always fits the column width now; the lightbox is the reading
+   path when the fitted text gets small (see #lightbox below). */
 .page {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: inherit;
   background: var(--color-white);
   border: 1px solid var(--gray-200);
   border-radius: 0.5rem;
   box-shadow:
     0 1px 2px rgba(40, 16, 41, 0.06),
     0 6px 16px rgba(40, 16, 41, 0.08);
-  /* Horizontal scroll viewport for the A4 page; matters on small screens
-     where the sheet renders wider than the column (see the readability
-     media query below). */
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
+  cursor: zoom-in;
 }
-.page svg { display: block; max-width: 100%; height: auto; }
-
-/* Hint only relevant once the sheet overflows and must be scrolled. */
-.sheet-scroll-hint { display: none; margin-bottom: 0.75rem; }
-
-/* Readability threshold (tuned, not a layout breakpoint): below ~75% scale the
-   A4 sheet text drops under ~12px and gets hard to read. Stop shrinking the
-   page; render it at its natural size (floored at 40rem) and let the .page
-   card scroll horizontally. Native pinch-zoom stays available. */
-@media (max-width: 600px) {
-  .page svg { width: auto; max-width: none; min-width: 40rem; height: auto; }
-  .sheet-scroll-hint { display: block; }
+.page:focus-visible {
+  outline: 3px solid var(--radio-focus-ring);
+  outline-offset: 2px;
 }
+.page svg { display: block; width: 100%; height: auto; }
+
+.sheet-scroll-hint { margin-bottom: 0.75rem; }
 
 .error {
   margin-bottom: 1rem;
@@ -727,3 +724,96 @@ button.download-link:hover { background: var(--download-button-hover-bg); }
   font-weight: bold;
 }
 .hint { font-size: 0.85rem; color: var(--hint-text); }
+
+/* ---- Zoom lightbox ---- */
+/* A tapped/clicked .page opens here: the sheet on a dark, blurred backdrop,
+   pan- and pinch-zoomable. Hidden until #lightbox gets [data-open]. */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  /* Solid dark layer paints unconditionally — the fallback (and the whole
+     look) where backdrop-filter is unsupported or GPU compositing drops it.
+     The blur lives on ::before so it can degrade without taking this with it. */
+  background: rgba(20, 8, 20, 0.82);
+  touch-action: none; /* we handle pinch/pan ourselves */
+}
+#lightbox[data-open] { display: block; }
+#lightbox::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #lightbox[data-open] { animation: lightbox-fade 0.15s ease-out; }
+}
+@keyframes lightbox-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The pan/zoom viewport fills the overlay; the stage inside is transformed. */
+.lightbox-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-stage svg,
+.lightbox-stage img {
+  display: block;
+  max-width: 92vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  /* JS drives translate/scale from here. */
+  transform: translate(0, 0) scale(1);
+  transform-origin: center center;
+  will-change: transform;
+  background: var(--color-white);
+  border-radius: 0.25rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Floating controls: close (top-right) + zoom cluster (bottom-center). */
+.lightbox-controls {
+  position: absolute;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 2;
+}
+.lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.lightbox-btn:hover { background: rgba(0, 0, 0, 0.7); }
+.lightbox-btn:focus-visible {
+  outline: 3px solid var(--radio-focus-ring);
+  outline-offset: 2px;
+}
+.lightbox-close {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  z-index: 2;
+}

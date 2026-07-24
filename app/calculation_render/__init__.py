@@ -391,5 +391,8 @@ def render_svg(result) -> str:
         )
     pages = out if isinstance(out, list) else [out]
     return "\n".join(
-        f'<div class="page">{_sanitize_svg(p).decode("utf-8")}</div>' for p in pages
+        f'<div class="page" role="button" tabindex="0" '
+        f'aria-label="Enlarge page {index} of {len(pages)}">'
+        f"{_sanitize_svg(p).decode('utf-8')}</div>"
+        for index, p in enumerate(pages, start=1)
     )
