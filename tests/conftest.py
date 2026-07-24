@@ -20,6 +20,13 @@ from app.forms import NamkhaRequest
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def _log_salt(monkeypatch):
+    """configure_logging() refuses to boot without NAMKHA_LOG_SALT; set one for
+    every test so the app lifespan (TestClient) and direct calls both pass."""
+    monkeypatch.setenv("NAMKHA_LOG_SALT", "test-salt")
+
+
 @pytest.fixture
 def client():
     return TestClient(main.app)

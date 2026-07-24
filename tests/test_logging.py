@@ -13,6 +13,7 @@ import logging
 from logging.handlers import QueueHandler
 
 import namkha_calculator as nc
+import pytest
 
 from app.event_log import (
     build_log_payload,
@@ -133,6 +134,12 @@ def test_summarize_real_result(fixture_form):
 
 
 # --- async wiring -----------------------------------------------------------------
+
+
+def test_configure_logging_requires_salt(monkeypatch):
+    monkeypatch.delenv("NAMKHA_LOG_SALT", raising=False)
+    with pytest.raises(RuntimeError, match="NAMKHA_LOG_SALT"):
+        configure_logging()
 
 
 def test_configure_logging_wires_a_queue_handler():

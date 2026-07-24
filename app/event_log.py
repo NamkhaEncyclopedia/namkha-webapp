@@ -125,7 +125,19 @@ def configure_logging() -> QueueListener:
     enqueue; the real StreamHandler(sys.stderr) lives on the listener's thread.
     propagate=False keeps these records from also going through uvicorn's root
     handlers (which would double-log). Idempotent, so uvicorn --reload doesn't
-    stack duplicate handlers."""
+    stack duplicate handlers.
+
+    Every calculation is logged with the birth name hashed (see hash_name), so
+    an unsalted hash would be a dictionary-lookup risk for any name in common
+    use; refuse to boot rather than silently log unsalted hashes. Read live
+    (not the module-level _NAME_HASH_SALT) so this can't be satisfied by an
+    env var set after import."""
+    if not os.getenv("NAMKHA_LOG_SALT"):
+        raise RuntimeError(
+            "NAMKHA_LOG_SALT must be set: calculation logging hashes the birth "
+            "name, and an unsalted hash is not safe to log."
+        )
+
     app_logger = logging.getLogger(_APP_LOGGER_NAME)
     for handler in list(app_logger.handlers):
         if isinstance(handler, QueueHandler):
