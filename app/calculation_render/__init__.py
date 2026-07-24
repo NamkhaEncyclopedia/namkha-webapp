@@ -317,7 +317,10 @@ def _build_data(result) -> dict:
             "app_version": constants.APP_VERSION,
         },
         "aspects": aspects,
-        "notes": [n.message for n in result.calculation_notes],
+        "notes": [
+            constants.NOTE_MESSAGES.get(note.note, note.message)
+            for note in result.calculation_notes
+        ],
     }
 
 

@@ -124,14 +124,28 @@ def test_conflicted_none_collapses_to_false(make_result):
     assert life["conflicted"] is False
 
 
-def test_notes_come_from_messages(make_result):
+def test_notes_use_friendly_overrides(make_result):
+    # The sheet shows the app's plain-language message, not the library's own
+    # developer-facing text.
     note = nc.CalculationNoteItem(
         note=CalculationNote.HIGH_LATITUDE,
         note_type=CalculationNoteType.CAUTION,
-        message="High latitude warning",
+        message="developer-facing text",
     )
     data = _build_data(make_result(notes=[note]))
-    assert data["notes"] == ["High latitude warning"]
+    assert data["notes"] == [constants.NOTE_MESSAGES[CalculationNote.HIGH_LATITUDE]]
+
+
+def test_unmapped_note_falls_back_to_library_message(make_result, monkeypatch):
+    # A note with no app override still renders, using the library's message.
+    monkeypatch.delitem(constants.NOTE_MESSAGES, CalculationNote.HIGH_LATITUDE)
+    note = nc.CalculationNoteItem(
+        note=CalculationNote.HIGH_LATITUDE,
+        note_type=CalculationNoteType.CAUTION,
+        message="fallback text",
+    )
+    data = _build_data(make_result(notes=[note]))
+    assert data["notes"] == ["fallback text"]
 
 
 def test_subject_name_falls_back_to_dash(make_result, make_request):
