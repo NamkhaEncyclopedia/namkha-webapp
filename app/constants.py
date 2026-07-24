@@ -5,9 +5,12 @@ import re
 import tomllib
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo, available_timezones
 
 import namkha_calculator as nc
+
+# TODO: private library member; switch to the public zone-list API once
+# namkha-calculator exposes one.
+from namkha_calculator.astronomy import _zone_tab_rows
 
 # Versions surfaced in the UI as flat badges, computed once at import.
 # Library: same call the sheet render uses, so page and sheet never disagree.
@@ -100,14 +103,19 @@ METHODS = [
 
 
 def _tz_label(zone_name: str) -> str:
-    """e.g. 'UTC+5:45 (Asia/Kathmandu)'. Offset is the CURRENT one (DST included
-    if in effect now) -- a display hint in the dropdown, not the offset used for
+    """e.g. 'Asia/Kathmandu (UTC+5:45)'. Offset is the CURRENT one (DST included
+    if in effect now) -- a display hint in the picker, not the offset used for
     the actual birth date, which the render computes separately."""
-    aware_now = datetime.now(ZoneInfo(zone_name))
+    aware_now = datetime.now(nc.zone(zone_name))
     total = int(aware_now.utcoffset().total_seconds())  # type: ignore[union-attr]
     sign = "+" if total >= 0 else "-"
     hours, seconds = divmod(abs(total), 3600)
-    return f"UTC{sign}{hours}:{seconds // 60:02d} ({zone_name})"
+    return f"{zone_name} (UTC{sign}{hours}:{seconds // 60:02d})"
 
 
-TIMEZONES = [(zone, _tz_label(zone)) for zone in sorted(available_timezones())]
+# Geographic zones from the library's bundled zone.tab: the canonical picker
+# set, without the legacy aliases the full tzdata tree also carries.
+TIMEZONES = [
+    (zone_name, _tz_label(zone_name))
+    for zone_name in sorted({key for _, _, key in _zone_tab_rows()})
+]

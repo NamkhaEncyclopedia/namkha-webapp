@@ -48,26 +48,71 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     suggestion = page.locator(".place-suggestion").first
     expect(suggestion).to_be_visible()
     suggestion.click()
-    # selectPlace fills lat/lon (4 dp); fetchTimezone then auto-fills the zone.
+    # selectPlace fills lat/lon (4 dp); fetchTimezone previews the detected zone.
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
-    expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
+    expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
+    # Automatic mode submits no zone; the library derives it server-side.
+    expect(page.locator("input[name='timezone']")).to_have_value("")
+    expect(page.locator("input[name='utc_offset']")).to_have_value("")
     # The selected label submits as the location name.
     expect(page.locator("input[name='location_name']")).to_have_value("Berlin, Germany")
 
 
-def test_manual_toggles_feed_hidden_inputs(page, live_server):
+def test_timezone_modes_feed_hidden_inputs(page, live_server):
     page.goto(live_server)
-    # Toggle both manual modes first so coordinate @change doesn't fire /timezone.
+    # Automatic is the default: only the mode select and status line render,
+    # and neither hidden field submits a value.
+    expect(page.locator(".timezone-detected")).to_be_visible()
+    expect(page.locator("#timezone-search")).to_have_count(0)
+    expect(page.locator("input[name='timezone']")).to_have_value("")
+    expect(page.locator("input[name='utc_offset']")).to_have_value("")
+
     page.get_by_text("Manually set coordinates").click()
-    page.get_by_text("Manually set time zone").click()
     page.fill("#latitude-ui", "10.5")
     page.fill("#longitude-ui", "20.5")
-    page.select_option("#timezone-ui", "Asia/Kathmandu")
     # Disabled UI inputs aren't serialized; the hidden :value mirrors are what posts.
     expect(page.locator("input[name='latitude']")).to_have_value("10.5")
     expect(page.locator("input[name='longitude']")).to_have_value("20.5")
+
+    # List mode: fuzzy search over the library's zone list, selection commits.
+    page.select_option("#timezone-mode", "list")
+    search = page.locator("#timezone-search")
+    expect(search).to_be_visible()
+    search.fill("kath")
+    suggestion = page.locator(".timezone-suggestion").first
+    expect(suggestion).to_contain_text("Asia/Kathmandu")
+    suggestion.click()
+    expect(search).to_have_value("Asia/Kathmandu")
     expect(page.locator("input[name='timezone']")).to_have_value("Asia/Kathmandu")
+    expect(page.locator("input[name='utc_offset']")).to_have_value("")
+
+    # Offset mode: sign + time-ish entry submit combined; zone field goes empty.
+    page.select_option("#timezone-mode", "offset")
+    expect(page.locator("#timezone-search")).to_have_count(0)
+    page.fill("#utc-offset-time", "5:45")
+    expect(page.locator("input[name='utc_offset']")).to_have_value("+5:45")
+    expect(page.locator("input[name='timezone']")).to_have_value("")
+    # DST is meaningless for a fixed offset: the control folds away.
+    expect(page.locator("#on_summer_time")).to_be_hidden()
+    # An out-of-range entry is flagged invalid, never silently dropped.
+    page.fill("#utc-offset-time", "16:30")
+    assert not page.locator("#utc-offset-time").evaluate("el => el.checkValidity()")
+
+
+def test_timezone_search_without_selection_blocks_submit(page, live_server):
+    # Typing without committing a zone must not silently fall back to automatic:
+    # the combobox carries a custom validity error until a zone is chosen.
+    page.goto(live_server)
+    page.select_option("#timezone-mode", "list")
+    search = page.locator("#timezone-search")
+    search.fill("nowhere")
+    assert not search.evaluate("el => el.checkValidity()")
+    # An exact key typed by hand commits on blur and clears the error.
+    search.fill("Asia/Kathmandu")
+    search.blur()
+    expect(page.locator("input[name='timezone']")).to_have_value("Asia/Kathmandu")
+    assert search.evaluate("el => el.checkValidity()")
 
 
 def test_manual_coords_make_place_a_plain_text_field(page, live_server):

@@ -1,0 +1,14 @@
+{
+  "name": "Fixed Offset",
+  "gender": "MALE",
+  "birth_date": "1978-04-02",
+  "birth_time": "23:10",
+  "location_name": "Kathmandu, Nepal",
+  "timezone": "",
+  "utc_offset": "+5:45",
+  "on_summer_time": "",
+  "latitude": "27.70",
+  "longitude": "85.32",
+  "namkha_type": "YEAR",
+  "method": "CLASSIC"
+}

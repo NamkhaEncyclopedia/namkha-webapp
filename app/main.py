@@ -207,25 +207,17 @@ def _valid_session_token(token, client: str) -> bool:
 # and without this both runs redo the astronomy from scratch. The Typst compile
 # itself still runs twice (SVG vs. PDF are different output formats, nothing to
 # share there); this only saves the calculation in between.
-# `nc.Subject`/`Location` aren't hashable (not frozen dataclasses), so the key is
-# built from their primitive fields rather than the objects themselves.
+# `nc.Subject` is a frozen dataclass (hashable) carrying every input that shapes
+# the result and its notes -- birth_timezone (None = derived) and on_summer_time
+# included -- so the subject itself keys the cache.
 RESULT_CACHE_MAXSIZE = 256
 _result_cache: OrderedDict[tuple, nc.NamkhaCalculationResult] = OrderedDict()
 _result_cache_lock = threading.Lock()
 
 
 def _result_cache_key(namkha_request: NamkhaRequest) -> tuple:
-    subject = namkha_request.subject
-    location = subject.birth_location
     return (
-        subject.name,
-        subject.gender,
-        subject.birth_datetime,
-        getattr(subject.effective_timezone, "key", None)
-        or str(subject.effective_timezone),
-        location.latitude,
-        location.longitude,
-        location.name,
+        namkha_request.subject,
         namkha_request.namkha_type,
         namkha_request.method,
     )
@@ -293,6 +285,11 @@ def _userfriendly_calculation_error(exc: ValueError) -> str:
     if "outside the supported range" in message:
         message = message.replace(" (limited by the bundled ephemeris)", "")
         return message[0].upper() + message[1:]
+    if "does not exist in" in message:
+        return (
+            "This birth time does not exist at the birth place: it was skipped "
+            "when the clocks jumped forward. Check the birth date and time."
+        )
     return "Could not calculate this Namkha; check the birth date, time, and place."
 
 

@@ -1,0 +1,13 @@
+{
+  "name": "Ambiguous Hour",
+  "gender": "FEMALE",
+  "birth_date": "1985-09-29",
+  "birth_time": "02:30",
+  "location_name": "Berlin, Germany",
+  "timezone": "",
+  "on_summer_time": "",
+  "latitude": "52.52",
+  "longitude": "13.40",
+  "namkha_type": "YEAR",
+  "method": "CLASSIC"
+}

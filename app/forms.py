@@ -1,7 +1,8 @@
 """Turn raw form fields into the library's input types."""
 
+import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfoNotFoundError
 
 import namkha_calculator as nc
@@ -22,6 +23,8 @@ FIELDS = (
     "birth_time",
     "location_name",
     "timezone",
+    "utc_offset",
+    "on_summer_time",
     "latitude",
     "longitude",
     "namkha_type",
@@ -51,10 +54,38 @@ def build_request(form) -> NamkhaRequest:
     except KeyError as exc:
         raise ValueError("Select a gender.") from exc
 
+    # Three time-zone modes: manual UTC offset, zone from the list, or empty ->
+    # None, the library derives the zone from the birth place and date.
+    timezone_name = (form.get("timezone") or "").strip()
+    utc_offset_text = (form.get("utc_offset") or "").strip()
+    if utc_offset_text:
+        offset_match = re.fullmatch(r"([+-])(\d{1,2})(?::([0-5]\d))?", utc_offset_text)
+        if offset_match is None:
+            raise ValueError("Enter a UTC offset like +5:45 or -3:30.")
+        offset = timedelta(
+            hours=int(offset_match.group(2)), minutes=int(offset_match.group(3) or 0)
+        )
+        if offset > timedelta(hours=16):
+            raise ValueError("UTC offset must be between -16:00 and +16:00.")
+        birth_timezone = nc.fixed_offset(
+            offset if offset_match.group(1) == "+" else -offset
+        )
+    elif timezone_name:
+        try:
+            birth_timezone = nc.zone(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Select a valid birth time zone.") from exc
+    else:
+        birth_timezone = None
+
+    # Tri-state radio for a birth time in the repeated fall-back hour:
+    # "" -> None (library guesses and notes it), "true"/"false" pin the reading.
     try:
-        birth_timezone = nc.zone(form.get("timezone") or "")
-    except ZoneInfoNotFoundError as exc:
-        raise ValueError("Select a valid birth time zone.") from exc
+        on_summer_time = {"": None, "true": True, "false": False}[
+            (form.get("on_summer_time") or "").strip()
+        ]
+    except KeyError as exc:
+        raise ValueError("Select whether summer time was in effect at birth.") from exc
 
     try:
         latitude = float(form["latitude"])
@@ -90,11 +121,14 @@ def build_request(form) -> NamkhaRequest:
             gender=gender,
             birth_datetime=birth_datetime,
             birth_timezone=birth_timezone,
+            on_summer_time=on_summer_time,
             birth_location=birth_location,
         )
     except TypeError as exc:
         raise ValueError("Enter a valid birth date, time, and time zone.") from exc
     except ValueError as exc:
+        if "outside the real-timezone range" in str(exc):
+            raise ValueError("UTC offset must be between -16:00 and +16:00.") from exc
         if "longitude" in str(exc):
             raise ValueError(
                 "The selected time zone does not match the birth location. "

@@ -213,21 +213,92 @@
                   <input type="time" id="birth_time" name="birth_time" class="input-text" required x-ref="birthTime">
                 </div>
                 <div>
-                  <label for="timezone-ui">Birth time zone:</label>
-                  <select id="timezone-ui" class="input-text" x-model="timezone" :disabled="!manualTimezone">
-                    {% for value, label in timezones %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                  <label for="timezone-mode">Birth time zone:</label>
+                  <span class="help-tip">
+                    <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-timezone" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
+                    <span role="tooltip" id="tip-timezone" class="help-text">By default the time zone (including summer time) is determined from the birth place and date, even for historical dates; the sheet notes any uncertainty. Pick a zone or enter a UTC offset only if you are certain the clock at birth followed it.</span>
+                  </span>
+                  <select id="timezone-mode" class="input-text" x-model="timezoneMode">
+                    <option value="auto">Automatic</option>
+                    <option value="list">Choose from list</option>
+                    <option value="offset">UTC offset</option>
                   </select>
-                  <input type="hidden" name="timezone" :value="timezone">
+                  <!-- Automatic mode submits neither field; the library derives the zone from birth place and date. -->
+                  <input type="hidden" name="timezone" :value="timezoneMode === 'list' ? timezone : ''">
+                  <input type="hidden" name="utc_offset" :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
                 </div>
               </div>
-              <label class="additional-checkbox">
-                <input type="checkbox" x-model="manualTimezone">
-                <span>Manually set time zone</span>
-              </label>
-              <span class="help-tip">
-                <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-timezone" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
-                <span role="tooltip" id="tip-timezone" class="help-text">This app detects the time zone (including DST) automatically, based on the place of birth. Only edit this manually if you are certain the detected time zone is wrong.</span>
-              </span>
+
+              <template x-if="timezoneMode === 'auto'">
+                <p class="timezone-detected" role="status" x-text="detectedTimezone ? 'Detected: ' + detectedTimezone : 'Determined from the birth place and date.'"></p>
+              </template>
+              <template x-if="timezoneMode === 'list'">
+                <div class="timezone-search">
+                  <label for="timezone-search" class="sr-only">Search time zones</label>
+                  <input
+                    type="text" id="timezone-search" class="input-text"
+                    autocomplete="off"
+                    placeholder="Start typing a time zone…"
+                    role="combobox"
+                    aria-controls="timezone-listbox"
+                    aria-autocomplete="list"
+                    :aria-expanded="timezoneSuggestions.length > 0"
+                    :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
+                    x-model="timezoneQuery"
+                    x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
+                    @input="searchTimezones()"
+                    @keydown="onTimezoneKeydown($event)"
+                    @blur="commitTimezoneOnBlur()"
+                  >
+                  <ul class="suggestion-list" id="timezone-listbox" role="listbox" x-show="timezoneSuggestions.length" x-cloak>
+                    <template x-for="(option, index) in timezoneSuggestions" :key="option.key">
+                      <li
+                        class="timezone-suggestion"
+                        role="option"
+                        :id="'timezone-option-' + index"
+                        :aria-selected="index === timezoneActiveIndex"
+                        :class="{ 'is-active': index === timezoneActiveIndex }"
+                        @mousedown.prevent="selectTimezone(option)"
+                      >
+                        <span x-text="option.label"></span>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+              <template x-if="timezoneMode === 'offset'">
+                <div class="utc-offset-field">
+                  <span class="utc-offset-prefix" aria-hidden="true">UTC</span>
+                  <label for="utc-offset-sign" class="sr-only">Offset direction</label>
+                  <select id="utc-offset-sign" class="input-text utc-offset-sign" x-model="utcOffsetSign">
+                    <option value="+">+</option>
+                    <option value="-">-</option>
+                  </select>
+                  <label for="utc-offset-time" class="sr-only">Offset hours and minutes</label>
+                  <input
+                    type="text" id="utc-offset-time" class="input-text utc-offset-time"
+                    inputmode="numeric" placeholder="5:45" required
+                    pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
+                    title="Hours 0 to 16, with optional minutes, like 5:45"
+                    x-model="utcOffsetTime"
+                    x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')"
+                  >
+                </div>
+              </template>
+
+              <div class="summer-time-field" x-show="timezoneMode !== 'offset'">
+                <label for="on_summer_time">Summer time (DST) at birth:</label>
+                <span class="help-tip">
+                  <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-summer-time" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
+                  <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
+                </span>
+                <!-- A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. -->
+                <select id="on_summer_time" name="on_summer_time" class="input-text" x-model="onSummerTime" :disabled="timezoneMode === 'offset'">
+                  <option value="">Not sure</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </div>
 
               <div class="inline-tooltip" role="alert" x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)" x-cloak>
                 <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
@@ -290,6 +361,7 @@
     </div>
   </footer>
 
+  <script type="application/json" id="timezone-options">{{ timezones | tojson }}</script>
   <script>
     function scrollToTop() {
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -307,6 +379,21 @@
       scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
+    // Rank a normalized timezone label against a normalized query:
+    // whole-label prefix > word prefix > substring > in-order characters.
+    function timezoneMatchScore(candidate, query) {
+      if (candidate.startsWith(query)) return 4;
+      if (candidate.split(' ').some(word => word.startsWith(query))) return 3;
+      if (candidate.includes(query)) return 2;
+      let position = 0;
+      for (const character of query) {
+        position = candidate.indexOf(character, position);
+        if (position < 0) return 0;
+        position += 1;
+      }
+      return 1;
+    }
+
     function namkhaForm() {
       return {
         method: 'CNNR',
@@ -320,8 +407,33 @@
         manualCoords: false,
         latitude: '',
         longitude: '',
-        manualTimezone: false,
+        timezoneMode: 'auto',
+        detectedTimezone: '',
         timezone: '',
+        timezoneQuery: '',
+        timezoneOptions: [],
+        timezoneSuggestions: [],
+        timezoneActiveIndex: -1,
+        utcOffsetSign: '+',
+        utcOffsetTime: '',
+        onSummerTime: '',
+
+        init() {
+          this.timezoneOptions = JSON.parse(
+            document.getElementById('timezone-options').textContent
+          ).map(([key, label]) => ({
+            key,
+            label,
+            normalized: label.toLowerCase().replaceAll('_', ' ').replaceAll('/', ' '),
+          }));
+          // Entering list mode with a detected zone pre-commits it as the selection.
+          this.$watch('timezoneMode', mode => {
+            if (mode === 'list' && !this.timezone && !this.timezoneQuery.trim() && this.detectedTimezone) {
+              this.timezone = this.detectedTimezone;
+              this.timezoneQuery = this.detectedTimezone;
+            }
+          });
+        },
 
         async searchPlaces() {
           // Manual-coordinate mode turns the place field into a plain text input.
@@ -404,16 +516,82 @@
         },
 
         async fetchTimezone() {
-          if (this.manualTimezone || this.latitude === '' || this.longitude === '') return;
+          if (this.latitude === '' || this.longitude === '') return;
           try {
             const response = await fetch(
               `/timezone?latitude=${this.latitude}&longitude=${this.longitude}`
             );
             const data = await response.json();
-            if (data.timezone) this.timezone = data.timezone;
+            if (data.timezone) this.detectedTimezone = data.timezone;
           } catch (error) {
-            /* keep current timezone on failure */
+            /* keep the current detected timezone on failure */
           }
+        },
+
+        searchTimezones() {
+          this.timezone = '';  // typing invalidates the committed choice
+          this.timezoneActiveIndex = -1;
+          const query = this.timezoneQuery.trim().toLowerCase()
+            .replaceAll('_', ' ').replaceAll('/', ' ');
+          if (!query) { this.timezoneSuggestions = []; return; }
+          const scored = this.timezoneOptions
+            .map(option => [timezoneMatchScore(option.normalized, query), option])
+            .filter(([score]) => score > 0)
+            .sort((a, b) => b[0] - a[0] || a[1].key.localeCompare(b[1].key));
+          this.timezoneSuggestions = scored.slice(0, 8).map(([, option]) => option);
+        },
+
+        selectTimezone(option) {
+          this.timezone = option.key;
+          this.timezoneQuery = option.key;
+          this.timezoneSuggestions = [];
+          this.timezoneActiveIndex = -1;
+        },
+
+        commitTimezoneOnBlur() {
+          this.timezoneSuggestions = [];
+          this.timezoneActiveIndex = -1;
+          if (this.timezone) return;
+          const typed = this.timezoneQuery.trim().toLowerCase();
+          const exact = this.timezoneOptions.find(
+            option => option.key.toLowerCase() === typed
+          );
+          if (exact) { this.timezone = exact.key; this.timezoneQuery = exact.key; }
+        },
+
+        onTimezoneKeydown(event) {
+          if (!this.timezoneSuggestions.length) {
+            if (event.key === 'ArrowDown') this.searchTimezones();
+            return;
+          }
+          switch (event.key) {
+            case 'ArrowDown':
+              event.preventDefault();
+              this.timezoneActiveIndex =
+                (this.timezoneActiveIndex + 1) % this.timezoneSuggestions.length;
+              break;
+            case 'ArrowUp':
+              event.preventDefault();
+              this.timezoneActiveIndex =
+                (this.timezoneActiveIndex - 1 + this.timezoneSuggestions.length) % this.timezoneSuggestions.length;
+              break;
+            case 'Enter':
+              if (this.timezoneActiveIndex >= 0) {
+                event.preventDefault();  // keep Enter from submitting the form
+                this.selectTimezone(this.timezoneSuggestions[this.timezoneActiveIndex]);
+              }
+              break;
+            case 'Escape':
+              this.timezoneSuggestions = [];
+              this.timezoneActiveIndex = -1;
+              break;
+          }
+        },
+
+        // The input pattern already limits hours to 0-16; only 16:01-16:59 slip past.
+        utcOffsetExceedsRange() {
+          const match = this.utcOffsetTime.match(/^(\d{1,2}):(\d{2})$/);
+          return match !== null && Number(match[1]) * 60 + Number(match[2]) > 16 * 60;
         },
 
         resetForm() {
@@ -427,8 +605,15 @@
             manualCoords: false,
             latitude: '',
             longitude: '',
-            manualTimezone: false,
+            timezoneMode: 'auto',
+            detectedTimezone: '',
             timezone: '',
+            timezoneQuery: '',
+            timezoneSuggestions: [],
+            timezoneActiveIndex: -1,
+            utcOffsetSign: '+',
+            utcOffsetTime: '',
+            onSummerTime: '',
             isSearchingPlaces: false,
             placesError: '',
           });
@@ -453,8 +638,15 @@
             manualCoords: true,
             latitude: data.latitude,
             longitude: data.longitude,
-            manualTimezone: true,
-            timezone: data.timezone,
+            timezoneMode: data.utc_offset ? 'offset' : (data.timezone ? 'list' : 'auto'),
+            detectedTimezone: '',
+            timezone: data.timezone || '',
+            timezoneQuery: data.timezone || '',
+            timezoneSuggestions: [],
+            timezoneActiveIndex: -1,
+            utcOffsetSign: data.utc_offset ? data.utc_offset[0] : '+',
+            utcOffsetTime: data.utc_offset ? data.utc_offset.slice(1) : '',
+            onSummerTime: data.on_summer_time || '',
             placesError: '',
           });
           this.$refs.name.value = data.name || '';
