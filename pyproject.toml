@@ -1,6 +1,6 @@
 [project]
 name = "namkha-webapp"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Web app to calculate a Namkha and organize results in a downloadable calculation sheet"
 authors = [{ name = "Namkha Encyclopedia" }]
 license = "GPL-3.0-or-later"
