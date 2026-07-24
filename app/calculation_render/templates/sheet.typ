@@ -7,18 +7,38 @@
 
 #let data = json("data.json")
 
+#let name-suffix = if data.subject.name != "—" {
+  ": " + data.subject.name
+} else { "" }
+#let sheet-title = (
+  data.meta.type
+    + " Namkha Calculation ("
+    + data.meta.method
+    + ")"
+    + name-suffix
+)
+#let sheet-author = (
+  "Namkha Calculator (lib: "
+    + data.meta.version
+    + ", app: "
+    + data.meta.app_version
+    + ")"
+)
+
+// PDF metadata (Title/Author), read by PDF viewers and OS file search.
+#set document(
+  title: [#sheet-title],
+  author: sheet-author,
+)
+
 #set page(
   paper: "a4",
   margin: (x: 1.5cm, top: 1.5cm, bottom: 1.8cm),
   footer: context {
-    let name-suffix = if data.subject.name != "—" {
-      ": " + data.subject.name
-    } else { "" }
-    let title = data.meta.type + " Namkha Calculation" + name-suffix
     set text(size: 8pt, fill: rgb("#666666"))
     align(
       center,
-      [#title | namkha-calculator #data.meta.version | Page #counter(page).display() of #counter(page).final().first()],
+      [#sheet-title | namkha-calculator #data.meta.version | Page #counter(page).display() of #counter(page).final().first()],
     )
   },
 )

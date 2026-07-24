@@ -198,6 +198,27 @@ def test_render_pdf_is_a_valid_pdf(fixture_form):
     assert len(pdf) > 1000
 
 
+def test_render_pdf_embeds_document_metadata(fixture_form):
+    """Title (incl. method) and author (lib/app versions) should land in the
+    PDF's XMP metadata; no keywords are set. Assertions are tag-wrapped so a
+    match can only come from the metadata stream, not the visible sheet text
+    (which shows type/method/name separately, and the footer repeats the
+    title string but without XMP tags)."""
+    result = _real(fixture_form, "year_classic_berlin")
+    pdf = render_pdf(result)
+    assert (
+        b'<dc:title><rdf:Alt><rdf:li xml:lang="x-default">'
+        b"Year Namkha Calculation (Classic): Sample Person</rdf:li>" in pdf
+    )
+    expected_author = (
+        f"<dc:creator><rdf:Seq><rdf:li>Namkha Calculator "
+        f"(lib: {constants.LIBRARY_VERSION}, app: {constants.APP_VERSION})"
+        f"</rdf:li>"
+    ).encode()
+    assert expected_author in pdf
+    assert b"<pdf:Keywords>" not in pdf
+
+
 def test_real_result_flows_through_render_helpers(fixture_form):
     """Interface-drift guard: a real result must satisfy the same shape the synthetic
     builders assume."""

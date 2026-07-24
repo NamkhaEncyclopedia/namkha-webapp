@@ -310,6 +310,7 @@ def _build_data(result) -> dict:
             "birth_animal": result.birth_animal.value,
             "birth_mewa": result.birth_mewa,
             "version": importlib.metadata.version("namkha-calculator"),
+            "app_version": constants.APP_VERSION,
         },
         "aspects": aspects,
         "notes": [n.message for n in result.calculation_notes],
