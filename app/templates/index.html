@@ -39,8 +39,10 @@
     <nav id="primary-nav" :class="{ 'is-open': navOpen }">
       <ul>
         <li><span class="nav-diamond nav-diamond--wood" aria-hidden="true"></span><a href="#about" @click="navOpen = false">About</a></li>
+        <li><span class="nav-diamond nav-diamond--earth" aria-hidden="true"></span><a href="#donate" @click="navOpen = false">Donate</a></li>
         <li><span class="nav-diamond nav-diamond--fire" aria-hidden="true"></span><a href="https://github.com/NamkhaEncyclopedia/namkha-webapp" target="_blank" rel="noopener noreferrer">Source Code{% include "_external_link_icon.html" %}</a></li>
         <li><span class="nav-diamond nav-diamond--water" aria-hidden="true"></span><a href="https://namkha-encyclopedia.com/" target="_blank" rel="noopener">Namkha Encyclopedia{% include "_external_link_icon.html" %}</a></li>
+        <li><span class="nav-diamond nav-diamond--metal" aria-hidden="true"></span><a href="#privacy" @click="navOpen = false">Privacy</a></li>
       </ul>
     </nav>
   </header>
@@ -331,22 +333,11 @@
       </template>
     </section>
 
-    <section id="about" class="about">
-      <h2>About</h2>
-      <p>
-        This web app calculates a
-        <a href="https://en.wikipedia.org/wiki/Namkha">Namkha thread-cross</a> colour
-        scheme in the tradition of
-        <a href="https://en.wikipedia.org/wiki/Namkhai_Norbu">Chögyal Namkhai Norbu
-        Rinpoche</a>. Enter the date, time, and place of birth, and it computes the
-        harmonization of the elements and renders a printable sheet with the colour
-        table and an illustration of the made Namkha.
-      </p>
-      <p>
-        The project is in an alpha stage – all calculations should be checked manually
-        when making a real Namkha.
-      </p>
-    </section>
+    {% include "_about.html" %}
+
+    {% include "_donate.html" %}
+
+    {% include "_privacy.html" %}
   </div>
 
   <footer>

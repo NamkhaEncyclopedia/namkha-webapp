@@ -9,6 +9,8 @@
   --submit-button-hover-bg: #9c0a0a;
   --download-button-bg: #205d15;
   --download-button-hover-bg: #1a4d11;
+  --donate-button-bg: #b98600;
+  --donate-button-hover-bg: #9c7100;
   --form-panel-bg: #f7f6f6;
   --form-panel-gradient-start: #f4fbfa;
   --form-panel-border: #99f6e4; /* teal-200 */
@@ -41,6 +43,8 @@
   --element-wood: #3abe5b;
   --element-fire: #c81d24;
   --element-water: #3e7dc6;
+  --element-earth: #fbd448;
+  --element-metal: #f9f7f8;
 }
 
 /* ---- Vendored fonts (no Google Fonts CDN) ---- */
@@ -186,6 +190,8 @@ header nav li { display: flex; align-items: center; gap: 0.4rem; }
 .nav-diamond--wood { background: var(--element-wood); }
 .nav-diamond--fire { background: var(--element-fire); }
 .nav-diamond--water { background: var(--element-water); }
+.nav-diamond--earth { background: var(--element-earth); }
+.nav-diamond--metal { background: var(--element-metal); }
 
 /* Below this width the title + 3 links no longer fit one row: collapse the
    nav into a hamburger-triggered dropdown instead of wrapping/squeezing. */
@@ -680,6 +686,22 @@ button.download-link:hover { background: var(--download-button-hover-bg); }
   border-top: 2px solid var(--gray-400);
 }
 .about h2 { font-size: 1.875rem; font-weight: 500; }
+
+.donate-button {
+  display: inline-block;
+  text-align: center;
+  color: var(--color-white);
+  font-weight: 500;
+  background: var(--donate-button-bg);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-decoration: none;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.donate-button:hover { background: var(--donate-button-hover-bg); }
 
 /* ---- Result sheet ---- */
 /* Each rendered page is a separate sheet card with a subtle border, echoing
