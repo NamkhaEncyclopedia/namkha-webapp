@@ -288,12 +288,16 @@ def _build_data(result) -> dict:
                 "conflicted": bool(harmonized_aspect.is_conflicted),
             }
         )
-    utc_offset = _utc_offset(subject)
-    utc_offset_plain = utc_offset[1:-1]
-    birth_text = (
-        f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
-        f"{utc_offset_plain} ({subject.effective_timezone})"
-    )
+    zone_text = str(subject.effective_timezone)
+    if zone_text.startswith("UTC"):
+        # Fixed offset (e.g. "UTC+05:45"): already carries the offset, no
+        # separate zone name to pair it with.
+        birth_text = f"{subject.birth_datetime:%Y-%m-%d %H:%M} ({zone_text})"
+    else:
+        utc_offset_plain = _utc_offset(subject)[1:-1]
+        birth_text = (
+            f"{subject.birth_datetime:%Y-%m-%d %H:%M} {utc_offset_plain} ({zone_text})"
+        )
     return {
         "subject": {
             "name": subject.name or "—",
