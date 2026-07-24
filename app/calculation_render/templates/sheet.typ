@@ -158,10 +158,26 @@
 #pagebreak()
 #align(center, image("namkha.svg", width: 100%))
 
-#v(8pt)
+// One note stays under the illustration; two or more get their own page so the
+// section is never split across the page break.
+#if data.notes.len() >= 2 { pagebreak() } else { v(8pt) }
 == Notes
+#let note-icon(kind) = move(
+  dy: 0.5pt,
+  image(
+    if kind == "caution" { "note_caution.svg" } else { "note_notice.svg" },
+    width: 12pt,
+  ),
+)
 #if data.notes.len() == 0 [
   —
-] else [
-  #list(..data.notes.map(n => [#n]))
-]
+] else {
+  set par(leading: 0.55em)
+  grid(
+    columns: (auto, 1fr),
+    column-gutter: 6pt,
+    row-gutter: 11pt,
+    align: (center + top, left + top),
+    ..data.notes.map(note => (note-icon(note.kind), [#note.message])).flatten(),
+  )
+}

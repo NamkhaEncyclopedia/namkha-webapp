@@ -18,6 +18,7 @@ from pathlib import Path
 import namkha_calculator as nc
 import typst
 from lxml import etree
+from namkha_calculator.calculation_notes import CalculationNoteType
 
 from app import constants
 
@@ -318,7 +319,15 @@ def _build_data(result) -> dict:
         },
         "aspects": aspects,
         "notes": [
-            constants.NOTE_MESSAGES.get(note.note, note.message)
+            {
+                "message": constants.NOTE_MESSAGES.get(note.note, note.message),
+                # Severity picks the icon the sheet draws: caution vs. info.
+                "kind": (
+                    "caution"
+                    if note.note_type == CalculationNoteType.CAUTION
+                    else "notice"
+                ),
+            }
             for note in result.calculation_notes
         ],
     }
@@ -335,7 +344,8 @@ def _compile_tmpdir(result):
         tmpdir = Path(tmp)
         (tmpdir / "namkha.svg").write_text(svg, encoding="utf-8")
         (tmpdir / "data.json").write_text(json.dumps(data), encoding="utf-8")
-        (tmpdir / "logo.svg").write_bytes((TEMPLATES / "logo.svg").read_bytes())
+        for asset in ("logo.svg", "note_notice.svg", "note_caution.svg"):
+            (tmpdir / asset).write_bytes((TEMPLATES / asset).read_bytes())
         (tmpdir / "sheet.typ").write_text(
             TYP_TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8"
         )

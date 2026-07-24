@@ -133,7 +133,12 @@ def test_notes_use_friendly_overrides(make_result):
         message="developer-facing text",
     )
     data = _build_data(make_result(notes=[note]))
-    assert data["notes"] == [constants.NOTE_MESSAGES[CalculationNote.HIGH_LATITUDE]]
+    assert data["notes"] == [
+        {
+            "message": constants.NOTE_MESSAGES[CalculationNote.HIGH_LATITUDE],
+            "kind": "caution",
+        }
+    ]
 
 
 def test_unmapped_note_falls_back_to_library_message(make_result, monkeypatch):
@@ -145,7 +150,23 @@ def test_unmapped_note_falls_back_to_library_message(make_result, monkeypatch):
         message="fallback text",
     )
     data = _build_data(make_result(notes=[note]))
-    assert data["notes"] == ["fallback text"]
+    assert data["notes"] == [{"message": "fallback text", "kind": "caution"}]
+
+
+def test_note_kind_reflects_severity(make_result):
+    # NOTICE severity gets the info kind; CAUTION gets the caution kind.
+    notice = nc.CalculationNoteItem(
+        note=CalculationNote.LOCAL_MEAN_TIME,
+        note_type=CalculationNoteType.NOTICE,
+        message="a notice",
+    )
+    caution = nc.CalculationNoteItem(
+        note=CalculationNote.PERIOD_BOUNDARY,
+        note_type=CalculationNoteType.CAUTION,
+        message="a caution",
+    )
+    data = _build_data(make_result(notes=[notice, caution]))
+    assert [note["kind"] for note in data["notes"]] == ["notice", "caution"]
 
 
 def test_subject_name_falls_back_to_dash(make_result, make_request):
