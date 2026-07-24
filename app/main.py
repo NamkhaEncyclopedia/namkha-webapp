@@ -5,6 +5,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import secrets
 import threading
 import time
@@ -13,6 +14,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 import namkha_calculator as nc
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -334,6 +336,40 @@ async def calculate(request: Request):
     return _result_response(request, form, svg=svg)
 
 
+def _pdf_filename(namkha_request: NamkhaRequest) -> str:
+    """Descriptive download name: subject name (if given), namkha type,
+    calculation method, birth date."""
+    subject = namkha_request.subject
+    parts = []
+    if subject.name:
+        slug = re.sub(r"[^\w]+", "-", subject.name, flags=re.UNICODE).strip("-_")
+        if slug:
+            parts.append(slug)
+    parts.append(namkha_request.namkha_type.name.capitalize())
+    parts.append(namkha_request.method.name.capitalize())
+    parts.append(subject.birth_datetime.date().isoformat())
+    return "namkha-" + "-".join(parts) + ".pdf"
+
+
+def _content_disposition(filename: str) -> str:
+    """RFC 6266 header: ASCII fallback plus a UTF-8 filename* for names with
+    non-ASCII characters (e.g. accented or Tibetan subject names).
+
+    Strips CR/LF itself rather than trusting the caller to have done so --
+    header-injection safety must not depend on _pdf_filename's regex staying
+    strict."""
+    filename = filename.replace("\r", "").replace("\n", "")
+    ascii_fallback = (
+        filename.encode("ascii", "ignore").decode("ascii").replace('"', "'")
+    )
+    if not ascii_fallback:
+        ascii_fallback = "namkha.pdf"
+    return (
+        f'attachment; filename="{ascii_fallback}"; '
+        f"filename*=UTF-8''{quote(filename, safe='')}"
+    )
+
+
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
     client = _client_ip(request)
@@ -364,7 +400,9 @@ async def download_pdf(request: Request):
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="namkha.pdf"'},
+        headers={
+            "Content-Disposition": _content_disposition(_pdf_filename(namkha_request))
+        },
     )
 
 

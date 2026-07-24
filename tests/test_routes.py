@@ -70,7 +70,14 @@ def test_download_pdf_happy(client, fixture_form):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content[:5] == b"%PDF-"
-    assert 'filename="namkha.pdf"' in response.headers["content-disposition"]
+    assert (
+        'filename="namkha-Sample-Person-Year-Classic-1985-03-15.pdf"'
+        in response.headers["content-disposition"]
+    )
+    assert (
+        "filename*=UTF-8''namkha-Sample-Person-Year-Classic-1985-03-15.pdf"
+        in response.headers["content-disposition"]
+    )
 
 
 def test_download_pdf_error_is_400(client, fixture_form):
