@@ -3,7 +3,7 @@ name = "namkha-webapp"
 version = "0.1.0"
 description = "Web app to calculate a Namkha and organize results in a downloadable calculation sheet"
 authors = [{ name = "Namkha Encyclopedia" }]
-license = { text = "Apache-2.0" }
+license = "GPL-3.0-or-later"
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
 dependencies = [

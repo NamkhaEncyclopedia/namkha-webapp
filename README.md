@@ -17,7 +17,11 @@ library.
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). See [LICENSE](LICENSE).
 
-Copyright 2026 Namkha Encyclopedia. Redistributions and derivative works
-must retain this attribution.
+This project depends on the `namkha-calculator` library, which is licensed
+under the GPL-3.0-or-later; distributing this app therefore requires
+GPL-compatible terms.
+
+Copyright 2026 Namkha Encyclopedia.
