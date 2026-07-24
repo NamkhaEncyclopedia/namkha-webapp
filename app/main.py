@@ -270,6 +270,33 @@ async def favicon():
     return RedirectResponse("/static/img/favicon.ico")
 
 
+@app.get("/robots.txt", include_in_schema=False)
+async def robots(request: Request):
+    """/ is the only page worth crawling; everything else is a form action or
+    JSON endpoint with nothing to index."""
+    body = (
+        "User-agent: *\n"
+        "Disallow: /calculate\n"
+        "Disallow: /download.pdf\n"
+        "Disallow: /timezone\n"
+        "Disallow: /test-mode/\n"
+        f"Sitemap: {request.url_for('sitemap')}\n"
+    )
+    return Response(body, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap(request: Request):
+    """Single-page site: the sitemap just points crawlers at the homepage."""
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"  <url><loc>{request.url_for('index')}</loc></url>\n"
+        "</urlset>\n"
+    )
+    return Response(body, media_type="application/xml")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(

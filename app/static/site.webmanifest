@@ -1,6 +1,9 @@
 {
   "name": "Namkha Calculator",
   "short_name": "Namkha Calculator",
+  "description": "Calculate a Namkha thread-cross color scheme from a birth date, time, and place.",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/static/img/android-chrome-192x192.png",

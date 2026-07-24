@@ -19,6 +19,21 @@ def test_favicon_redirects(client):
     assert response.headers["location"] == "/static/img/favicon.ico"
 
 
+def test_robots_txt(client):
+    response = client.get("/robots.txt")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "Disallow: /calculate" in response.text
+    assert "Sitemap: http://testserver/sitemap.xml" in response.text
+
+
+def test_sitemap_xml(client):
+    response = client.get("/sitemap.xml")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+    assert "<loc>http://testserver/</loc>" in response.text
+
+
 # --- /calculate -------------------------------------------------------------------
 
 
