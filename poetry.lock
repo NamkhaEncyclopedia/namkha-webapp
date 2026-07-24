@@ -1157,19 +1157,19 @@ files = [
 
 [[package]]
 name = "namkha-calculator"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "Calculate Tibetan Namkha thread-cross color schemes in Chögyal Namkhai Norbu tradition."
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "namkha_calculator-0.1.0a3-py3-none-any.whl", hash = "sha256:b0569be6d427e54599558255b9a80409fdba9de2d4193300ca10478b74e4bf0c"},
-    {file = "namkha_calculator-0.1.0a3.tar.gz", hash = "sha256:67403243c8b364cddba11c5a19e0a6ac307543d50956666846a64ffe283d21f2"},
+    {file = "namkha_calculator-0.1.0a4-py3-none-any.whl", hash = "sha256:aa5bab91224fea51b784f67c56cf5bcf8d07ef9c224d349d048b92a9cc1caa29"},
+    {file = "namkha_calculator-0.1.0a4.tar.gz", hash = "sha256:0af6ddc32570e781ba1712f176fdfb68e0054c918a876f7f7ddc621d8c9e61a6"},
 ]
 
 [package.dependencies]
-pytz = ">=2025.2"
 skyfield = ">=1.49,<2.0"
+timezonefinder = ">=6.5"
 
 [[package]]
 name = "nodeenv"
@@ -1687,18 +1687,6 @@ text-unidecode = ">=1.3"
 
 [package.extras]
 unidecode = ["Unidecode (>=1.1.1)"]
-
-[[package]]
-name = "pytz"
-version = "2026.2"
-description = "World timezone definitions, modern and historical"
-optional = false
-python-versions = "*"
-groups = ["main"]
-files = [
-    {file = "pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126"},
-    {file = "pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a"},
-]
 
 [[package]]
 name = "pyyaml"
@@ -2313,4 +2301,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "91b9c260af5945f48ba7a90e914b37b8515fbafbf2a98fe7ae5c50c851912328"
+content-hash = "989edea9af1d38149fea2812cdaab8934ed1c16d028fe6fdf4a913b6f05c040f"

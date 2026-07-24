@@ -221,7 +221,8 @@ def _result_cache_key(namkha_request: NamkhaRequest) -> tuple:
         subject.name,
         subject.gender,
         subject.birth_datetime,
-        getattr(subject.birth_timezone, "zone", None) or str(subject.birth_timezone),
+        getattr(subject.effective_timezone, "key", None)
+        or str(subject.effective_timezone),
         location.latitude,
         location.longitude,
         location.name,

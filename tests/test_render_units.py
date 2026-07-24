@@ -222,9 +222,11 @@ def test_set_label_missing_id_is_noop():
 
 def test_utc_offset_sub_hour(make_request):
     # Nepal was UTC+5:30 in 1985 (the builder's default date); it moved to +5:45
-    # only in 1986. pytz.localize reflects the historical offset -> exercises the
-    # minutes branch either way.
-    subject = make_request(timezone="Asia/Kathmandu").subject
+    # only in 1986. The library reflects the historical offset -> exercises the
+    # minutes branch either way. Coords must match the zone (a4 validates the two).
+    subject = make_request(
+        timezone="Asia/Kathmandu", latitude=27.70, longitude=85.32
+    ).subject
     assert _utc_offset(subject) == "(UTC+5:30)"
 
 
@@ -237,7 +239,9 @@ def test_utc_offset_whole_hour(make_request):
 def test_utc_offset_negative(make_request):
     # 1985-03-15 is before US DST began that year -> EST (-5); exercises the
     # sign="-" branch, untouched by the two positive-offset cases above.
-    subject = make_request(timezone="America/New_York").subject
+    subject = make_request(
+        timezone="America/New_York", latitude=40.71, longitude=-74.01
+    ).subject
     assert _utc_offset(subject) == "(UTC-5:00)"
 
 

@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfoNotFoundError
 
 import namkha_calculator as nc
-import pytz
 
 
 @dataclass
@@ -52,8 +52,8 @@ def build_request(form) -> NamkhaRequest:
         raise ValueError("Select a gender.") from exc
 
     try:
-        birth_timezone = pytz.timezone(form["timezone"])
-    except pytz.UnknownTimeZoneError as exc:
+        birth_timezone = nc.zone(form.get("timezone") or "")
+    except ZoneInfoNotFoundError as exc:
         raise ValueError("Select a valid birth time zone.") from exc
 
     try:
@@ -84,11 +84,23 @@ def build_request(form) -> NamkhaRequest:
     except KeyError as exc:
         raise ValueError("Select a valid calculation method.") from exc
 
-    subject = nc.Subject(
-        name=name,
-        gender=gender,
-        birth_datetime=birth_datetime,
-        birth_timezone=birth_timezone,
-        birth_location=birth_location,
-    )
+    try:
+        subject = nc.Subject(
+            name=name,
+            gender=gender,
+            birth_datetime=birth_datetime,
+            birth_timezone=birth_timezone,
+            birth_location=birth_location,
+        )
+    except TypeError as exc:
+        raise ValueError("Enter a valid birth date, time, and time zone.") from exc
+    except ValueError as exc:
+        if "longitude" in str(exc):
+            raise ValueError(
+                "The selected time zone does not match the birth location. "
+                "Check the place and the time zone."
+            ) from exc
+        raise ValueError(
+            "Could not use this birth date, time, and place; check the values."
+        ) from exc
     return NamkhaRequest(subject=subject, namkha_type=namkha_type, method=method)

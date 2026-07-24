@@ -12,7 +12,6 @@ from pathlib import Path
 
 import namkha_calculator as nc
 import pytest
-import pytz
 from starlette.testclient import TestClient
 
 from app import main
@@ -114,7 +113,7 @@ def _make_request(
         name=name,
         gender=gender,
         birth_datetime=birth_datetime,
-        birth_timezone=pytz.timezone(timezone),
+        birth_timezone=nc.zone(timezone),
         birth_location=nc.Location(
             latitude=latitude, longitude=longitude, name=location_name
         ),

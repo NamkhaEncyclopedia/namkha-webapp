@@ -5,9 +5,9 @@ import re
 import tomllib
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo, available_timezones
 
 import namkha_calculator as nc
-import pytz
 
 # Versions surfaced in the UI as flat badges, computed once at import.
 # Library: same call the sheet render uses, so page and sheet never disagree.
@@ -37,7 +37,7 @@ def _prerelease_label(version: str) -> str | None:
 
 # Project-wide pre-release marker (the calculation engine governs result validity);
 # shown on both badges. Self-clears once the library ships a stable release.
-PRERELEASE_LABEL = _prerelease_label(LIBRARY_VERSION)  # "alpha" for 0.1.0a3
+PRERELEASE_LABEL = _prerelease_label(LIBRARY_VERSION)  # "alpha" for 0.1.0a4
 
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {
@@ -103,11 +103,11 @@ def _tz_label(zone_name: str) -> str:
     """e.g. 'UTC+5:45 (Asia/Kathmandu)'. Offset is the CURRENT one (DST included
     if in effect now) -- a display hint in the dropdown, not the offset used for
     the actual birth date, which the render computes separately."""
-    aware_now = datetime.now(pytz.timezone(zone_name))
+    aware_now = datetime.now(ZoneInfo(zone_name))
     total = int(aware_now.utcoffset().total_seconds())  # type: ignore[union-attr]
     sign = "+" if total >= 0 else "-"
     hours, seconds = divmod(abs(total), 3600)
     return f"UTC{sign}{hours}:{seconds // 60:02d} ({zone_name})"
 
 
-TIMEZONES = [(zone, _tz_label(zone)) for zone in pytz.common_timezones]
+TIMEZONES = [(zone, _tz_label(zone)) for zone in sorted(available_timezones())]

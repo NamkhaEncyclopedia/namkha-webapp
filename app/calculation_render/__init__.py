@@ -246,8 +246,7 @@ def fill_illustration(result) -> str:
 
 
 def _utc_offset(subject) -> str:
-    aware = subject.birth_timezone.localize(subject.birth_datetime)
-    total = int(aware.utcoffset().total_seconds())
+    total = int(subject.local_birth_datetime.utcoffset().total_seconds())
     sign = "+" if total >= 0 else "-"
     h, m = divmod(abs(total), 3600)
     return f"(UTC{sign}{h}:{m // 60:02d})"
@@ -293,7 +292,7 @@ def _build_data(result) -> dict:
     utc_offset_plain = utc_offset[1:-1]
     birth_text = (
         f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
-        f"{utc_offset_plain} ({subject.birth_timezone})"
+        f"{utc_offset_plain} ({subject.effective_timezone})"
     )
     return {
         "subject": {
