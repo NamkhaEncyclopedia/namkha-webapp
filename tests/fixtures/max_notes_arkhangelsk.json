@@ -1,0 +1,14 @@
+{
+  "name": "Maximum Notes",
+  "gender": "MALE",
+  "birth_date": "1849-12-15",
+  "birth_time": "05:00",
+  "location_name": "Arkhangelsk, Russia",
+  "timezone": "",
+  "utc_offset": "",
+  "on_summer_time": "",
+  "latitude": "64.54",
+  "longitude": "40.52",
+  "namkha_type": "YEAR",
+  "method": "CLASSIC"
+}
