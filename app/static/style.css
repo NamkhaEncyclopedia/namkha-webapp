@@ -574,7 +574,7 @@ h1.title {
 
 /* ---- Buttons ---- */
 button[type="submit"],
-button[type="reset"] {
+button.button-reset {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 0.5rem;
@@ -586,8 +586,8 @@ button[type="reset"] {
 button[type="submit"] { background: var(--submit-button-bg); color: var(--color-white); }
 button[type="submit"]:hover { background: var(--submit-button-hover-bg); }
 button[type="submit"]:disabled { opacity: 0.7; cursor: wait; }
-button[type="reset"] { background: var(--gray-300); color: var(--gray-600); }
-button[type="reset"]:hover { background: var(--reset-button-hover-bg); }
+button.button-reset { background: var(--gray-300); color: var(--gray-600); }
+button.button-reset:hover { background: var(--reset-button-hover-bg); }
 button > img {
   width: 1rem;
   height: 1rem;
