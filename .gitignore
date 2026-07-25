@@ -224,3 +224,6 @@ __marimo__/
 # AI tools
 CLAUDE.local.md
 TODO.local.md
+
+# Fly.io
+fly.toml
