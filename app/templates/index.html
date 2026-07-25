@@ -23,6 +23,7 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
   <link rel="manifest" href="/static/site.webmanifest">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/lightbox.css">
   <script src="/static/htmx.min.js"></script>
   <script defer src="/static/alpine.min.js"></script>
 </head>
@@ -668,10 +669,27 @@
        pinch-zoomable on a dark blurred backdrop. -->
   <div id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged calculation page" aria-hidden="true">
     <button type="button" class="lightbox-btn lightbox-close" data-lightbox-close aria-label="Close enlarged view">&#x2715;</button>
+    <!-- Pointer-device hint only: the touch gestures (pinch, drag) need no telling. -->
+    <p class="lightbox-hint">
+      <span>Ctrl + scroll to zoom</span>
+      <span>Shift + scroll sideways</span>
+      <span>Drag to pan</span>
+      <button type="button" class="lightbox-hint-close" data-lightbox-hint-close aria-label="Hide the controls hint">&#x2715;</button>
+    </p>
     <div class="lightbox-stage" data-lightbox-stage></div>
+    <!-- Page turners: shown only when the result has more than one page, and only
+         on pointer devices — touch swipes left/right instead. -->
+    <!-- Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
+         so a text arrow looks pushed down however the button centres it. -->
+    <button type="button" class="lightbox-btn lightbox-nav lightbox-nav-prev" data-lightbox-page="prev" aria-label="Previous page" hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4 7 12l8 8"/></svg>
+    </button>
+    <button type="button" class="lightbox-btn lightbox-nav lightbox-nav-next" data-lightbox-page="next" aria-label="Next page" hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>
+    </button>
     <div class="lightbox-controls">
       <button type="button" class="lightbox-btn" data-lightbox-zoom="-1" aria-label="Zoom out">&#8722;</button>
-      <button type="button" class="lightbox-btn" data-lightbox-zoom="reset" aria-label="Reset zoom">&#x2922;</button>
+      <button type="button" class="lightbox-btn" data-lightbox-zoom="fit" aria-label="Fit page width" aria-pressed="false">&#x2922;</button>
       <button type="button" class="lightbox-btn" data-lightbox-zoom="1" aria-label="Zoom in">&#43;</button>
     </div>
   </div>

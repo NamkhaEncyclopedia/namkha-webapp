@@ -1,0 +1,186 @@
+/* ---- Zoom lightbox ---- */
+/* A tapped/clicked .page opens here: the sheet on a dark, blurred backdrop,
+   pan- and pinch-zoomable. Hidden until #lightbox gets [data-open]. */
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: none;
+  /* Solid dark layer paints unconditionally — the fallback (and the whole
+     look) where backdrop-filter is unsupported or GPU compositing drops it.
+     The blur lives on ::before so it can degrade without taking this with it. */
+  background: rgba(20, 8, 20, 0.82);
+  touch-action: none; /* we handle pinch/pan ourselves */
+}
+#lightbox[data-open] { display: block; }
+#lightbox::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #lightbox[data-open] { animation: lightbox-fade 0.15s ease-out; }
+}
+@keyframes lightbox-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The pan/zoom viewport fills the overlay; the stage inside is transformed. */
+.lightbox-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Left-click-drag pans, so a drag must not start a text selection instead. */
+  user-select: none;
+}
+.lightbox-stage svg,
+.lightbox-stage img { cursor: grab; }
+.lightbox-stage[data-grabbing] svg,
+.lightbox-stage[data-grabbing] img { cursor: grabbing; }
+.lightbox-stage svg,
+.lightbox-stage img {
+  display: block;
+  /* The stage centers with flex, so the sheet is a flex item: without flex:none
+     its default flex-shrink squeezes the width back to the stage once zoom takes
+     it past the viewport, and the sheet stops growing while the (taller) box
+     around it keeps expanding — zoom appears to stall and pad with white. */
+  flex: none;
+  max-width: 92vw;
+  max-height: 92vh;
+  width: auto;
+  height: auto;
+  /* JS drives translate/scale from here. */
+  transform: translate(0, 0) scale(1);
+  transform-origin: center center;
+  will-change: transform;
+  background: var(--color-white);
+  border-radius: 0.25rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Floating controls: close (top-right) + zoom cluster (bottom-center). */
+.lightbox-controls {
+  position: absolute;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 2;
+}
+.lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+.lightbox-btn:hover { background: rgba(0, 0, 0, 0.7); }
+.lightbox-btn:focus-visible {
+  outline: 3px solid var(--radio-focus-ring);
+  outline-offset: 2px;
+}
+/* Round page turners, vertically centred. The left/right insets here are only a
+   fallback: lightbox.js sets them from the fitted sheet width, so the buttons sit
+   just outside its edges instead of out at the viewport rim. */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  border-radius: 50%;
+}
+.lightbox-nav svg { display: block; }
+.lightbox-nav-prev { left: max(1rem, env(safe-area-inset-left)); }
+.lightbox-nav-next { right: max(1rem, env(safe-area-inset-right)); }
+.lightbox-nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Zooming moves the buttons between the sheet edge and the window edge
+     (lightbox.js sets left/right): slide, don't jump. */
+  .lightbox-nav { transition: left 0.18s ease-out, right 0.18s ease-out; }
+}
+.lightbox-nav[hidden] { display: none; }
+/* Touch turns pages by swiping, so the buttons would only cover the sheet. */
+@media (hover: none), (pointer: coarse) {
+  .lightbox-nav { display: none; }
+}
+
+.lightbox-close {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  z-index: 2;
+}
+
+/* Faint one-liner naming the wheel/drag controls; sits clear of the close
+   button. The sheet reaches 92vh, so the hint overlaps its white top edge —
+   hence the dark pill (same idea as the control buttons, which overlap the
+   bottom). Hidden where there is no wheel (touch) — pinch and drag need no
+   telling — and pointer-transparent so it can't swallow a click on the sheet. */
+.lightbox-hint {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* One line only: wrapping would leave the separator rules dangling at the
+     start of a wrapped line. Too narrow to fit -> the hint is dropped below. */
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 0.4rem;
+  pointer-events: none; /* only the dismiss button takes clicks */
+}
+.lightbox-hint[hidden] { display: none; }
+/* Hairline rule between tips (and before the dismiss button). */
+.lightbox-hint > * + * {
+  margin-left: 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+.lightbox-hint-close {
+  padding: 0 0 0 0.6rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.lightbox-hint-close:hover { color: #fff; }
+.lightbox-hint-close:focus-visible {
+  outline: 2px solid var(--radio-focus-ring);
+  outline-offset: 2px;
+}
+/* No wheel to speak of (touch), or no room for the single line: drop the hint. */
+@media (hover: none), (pointer: coarse), (max-width: 34rem) {
+  .lightbox-hint { display: none; }
+}
