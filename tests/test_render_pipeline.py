@@ -166,7 +166,41 @@ def test_note_kind_reflects_severity(make_result):
         message="a caution",
     )
     data = _build_data(make_result(notes=[notice, caution]))
-    assert [note["kind"] for note in data["notes"]] == ["notice", "caution"]
+    assert [note["kind"] for note in data["notes"]] == ["caution", "notice"]
+
+
+def test_notes_sort_cautions_first(make_result):
+    # Cautions (warnings) sort before notices, regardless of input order;
+    # relative order within each group is preserved.
+    notice_one = nc.CalculationNoteItem(
+        note=CalculationNote.LOCAL_MEAN_TIME,
+        note_type=CalculationNoteType.NOTICE,
+        message="notice one",
+    )
+    caution_one = nc.CalculationNoteItem(
+        note=CalculationNote.PERIOD_BOUNDARY,
+        note_type=CalculationNoteType.CAUTION,
+        message="caution one",
+    )
+    notice_two = nc.CalculationNoteItem(
+        note=CalculationNote.PRE_GREGORIAN_DATE,
+        note_type=CalculationNoteType.NOTICE,
+        message="notice two",
+    )
+    caution_two = nc.CalculationNoteItem(
+        note=CalculationNote.HIGH_LATITUDE,
+        note_type=CalculationNoteType.CAUTION,
+        message="caution two",
+    )
+    data = _build_data(
+        make_result(notes=[notice_one, caution_one, notice_two, caution_two])
+    )
+    assert [note["kind"] for note in data["notes"]] == [
+        "caution",
+        "caution",
+        "notice",
+        "notice",
+    ]
 
 
 def test_subject_name_falls_back_to_dash(make_result, make_request):

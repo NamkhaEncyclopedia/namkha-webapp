@@ -328,7 +328,10 @@ def _build_data(result) -> dict:
                     else "notice"
                 ),
             }
-            for note in result.calculation_notes
+            for note in sorted(
+                result.calculation_notes,
+                key=lambda note: note.note_type != CalculationNoteType.CAUTION,
+            )
         ],
     }
 
