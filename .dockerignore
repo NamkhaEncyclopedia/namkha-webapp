@@ -1,0 +1,17 @@
+.git
+.claude
+.idea
+.qodo
+.mypy_cache
+.pytest_cache
+.ruff_cache
+target
+tests
+CLAUDE.local.md
+TODO.local.md
+README.md
+Dockerfile
+.dockerignore
+fly.toml
+**/__pycache__
+**/*.pyc
