@@ -59,8 +59,10 @@ select = ["E", "F", "I", "UP", "B"]
 profile = "jinja"
 indent = 2
 # J004: static urls intentionally hardcoded as /static/... (see CLAUDE.local.md), not url_for.
+# J018: route urls (hx-post, form action) hardcoded for the same reason.
 # H023: entity refs (&times;, &copy;, &#x2715; etc.) are used deliberately, not accidental.
-ignore = "J004,H023"
+# T028: spaceless tags would strip spaces that belong to the rendered text.
+ignore = "J004,J018,H023,T028"
 
 [tool.mypy]
 python_version = "3.13"

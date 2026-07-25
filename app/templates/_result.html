@@ -4,16 +4,16 @@
   <div class="download">
     <form method="post" action="/download.pdf">
       {% for key, value in form.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
-      <button type="submit" class="download-link"><img src="/static/img/download.svg" alt="">Download PDF</button>
+      <button type="submit" class="download-link">
+        <img src="/static/img/download.svg" alt="">
+        Download PDF
+      </button>
     </form>
   </div>
-
   <div class="diagrams">
     <p class="hint sheet-scroll-hint">Tap or click a page to enlarge and zoom, or download the PDF above.</p>
-    <div
-      class="sheet"
-      role="img"
-      aria-label="Namkha calculation sheet{% if form.get('name') %} for {{ form['name'] }}{% endif %}, {{ form.get('namkha_type', '') | lower }} type, {{ form.get('method', '') | lower }} method"
-    >{{ svg | safe }}</div>
+    <div class="sheet"
+         role="img"
+         aria-label="Namkha calculation sheet{% if form.get('name') %} for {{ form['name'] }}{% endif %}, {{ form.get('namkha_type', '') | lower }} type, {{ form.get('method', '') | lower }} method">{{ svg | safe }}</div>
   </div>
 {% endif %}

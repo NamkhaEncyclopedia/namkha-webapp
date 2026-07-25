@@ -1,376 +1,457 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Namkha Calculator</title>
-  <meta name="description" content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
-  <meta name="robots" content="index, follow">
-  <meta name="theme-color" content="#00b4c0">
-  <link rel="canonical" href="{{ request.url_for('index') }}">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Namkha Calculator">
-  <meta property="og:title" content="Namkha Calculator">
-  <meta property="og:url" content="{{ request.url_for('index') }}">
-  <meta property="og:description" content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
-  <meta property="og:image" content="{{ request.url_for('static', path='img/android-chrome-512x512.png') }}">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Namkha Calculator">
-  <meta name="twitter:description" content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
-  <meta name="twitter:image" content="{{ request.url_for('static', path='img/android-chrome-512x512.png') }}">
-  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
-  <link rel="icon" href="/static/img/favicon.ico" sizes="32x32">
-  <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
-  <link rel="manifest" href="/static/site.webmanifest">
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/lightbox.css">
-  <script src="/static/htmx.min.js"></script>
-  <script defer src="/static/alpine.min.js"></script>
-</head>
-<body>
-  <a class="skip-link" href="#calculator">Skip to content</a>
-  <header x-data="{ navOpen: false }">
-    <div class="header-bar">
-      <a href="#calculator"><img class="logo" src="/static/img/logo.svg" alt="Namkha Encyclopedia"></a>
-      <span class="nav-title" aria-label="Namkha Calculator by Namkha Encyclopedia">
-        <span aria-hidden="true">
-          <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">C</span><span class="ital">alculator</span>
-          <span class="by">by <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">E</span><span class="ital">ncyclopedia</span></span>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Namkha Calculator</title>
+    <meta name="description"
+          content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#00b4c0">
+    <link rel="canonical" href="{{ request.url_for('index') }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Namkha Calculator">
+    <meta property="og:title" content="Namkha Calculator">
+    <meta property="og:url" content="{{ request.url_for('index') }}">
+    <meta property="og:description"
+          content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
+    <meta property="og:image"
+          content="{{ request.url_for('static', path='img/android-chrome-512x512.png') }}">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Namkha Calculator">
+    <meta name="twitter:description"
+          content="Calculate a Namkha thread-cross color scheme from a birth date, time, and place, with a downloadable PDF sheet.">
+    <meta name="twitter:image"
+          content="{{ request.url_for('static', path='img/android-chrome-512x512.png') }}">
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+    <link rel="icon" href="/static/img/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/lightbox.css">
+    <script src="/static/htmx.min.js"></script>
+    <script defer src="/static/alpine.min.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#calculator">Skip to content</a>
+    <header x-data="{ navOpen: false }">
+      <div class="header-bar">
+        <a href="#calculator">
+          <img class="logo" src="/static/img/logo.svg" alt="Namkha Encyclopedia">
+        </a>
+        <span class="nav-title"
+              aria-label="Namkha Calculator by Namkha Encyclopedia">
+          <span aria-hidden="true">
+            <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">C</span><span class="ital">alculator</span>
+            <span class="by">by <span class="cap">N</span><span class="ital">amkha</span> <span class="cap">E</span><span class="ital">ncyclopedia</span></span>
+          </span>
         </span>
-      </span>
-      <button
-        type="button"
-        class="nav-toggle"
-        :aria-expanded="navOpen"
-        aria-controls="primary-nav"
-        @click="navOpen = !navOpen"
-      >
-        <span class="sr-only">Menu</span>
-        <span class="nav-toggle-bar" aria-hidden="true"></span>
-        <span class="nav-toggle-bar" aria-hidden="true"></span>
-        <span class="nav-toggle-bar" aria-hidden="true"></span>
-      </button>
-    </div>
-    <nav id="primary-nav" :class="{ 'is-open': navOpen }">
-      <ul>
-        <li><span class="nav-diamond nav-diamond--wood" aria-hidden="true"></span><a href="#about" @click="navOpen = false">About</a></li>
-        <li><span class="nav-diamond nav-diamond--earth" aria-hidden="true"></span><a href="#donate" @click="navOpen = false">Donate</a></li>
-        <li><span class="nav-diamond nav-diamond--fire" aria-hidden="true"></span><a href="https://github.com/NamkhaEncyclopedia/namkha-webapp" target="_blank" rel="noopener noreferrer">Source Code{% include "_external_link_icon.html" %}</a></li>
-        <li><span class="nav-diamond nav-diamond--water" aria-hidden="true"></span><a href="https://namkha-encyclopedia.com/" target="_blank" rel="noopener">Namkha Encyclopedia{% include "_external_link_icon.html" %}</a></li>
-        <li><span class="nav-diamond nav-diamond--metal" aria-hidden="true"></span><a href="#privacy" @click="navOpen = false">Privacy</a></li>
-      </ul>
-    </nav>
-  </header>
-
-  <div class="container">
-    <h1 class="title" id="calculator" tabindex="-1">Namkha Calculator</h1>
-    <div class="version-badges">
-      <span class="badge-row">
-        <span class="badge"><span class="badge-key">library</span><span class="badge-val">v{{ library_version }}</span></span>
-        {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
-      </span>
-      <span class="badge-row">
-        <span class="badge"><span class="badge-key">app</span><span class="badge-val">v{{ app_version }}</span></span>
-        {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
-      </span>
-    </div>
-
-    <section class="application">
-      <div class="form-container">
-        <form
-          class="calculator-form"
-          hx-post="/calculate"
-          hx-target="#result"
-          hx-swap="innerHTML"
-          hx-disabled-elt="find button[type='submit']"
-          x-data="namkhaForm()"
-          x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
-        >
-          <input type="hidden" name="session_token" value="{{ session_token }}">
-          {% if test_mode_enabled %}
-          <div class="test-mode-picker" x-data="{ fixtures: [], chosen: '', visible: true }" x-init="fetch('/test-mode/fixtures').then(r => r.json()).then(names => fixtures = names)" x-show="visible">
-            <label for="test-mode-fixture" class="sr-only">Test mode — load sample data</label>
-            <select id="test-mode-fixture" class="input-text" x-model="chosen">
-              <option value="">Choose a fixture…</option>
-              <template x-for="fixtureName in fixtures" :key="fixtureName">
-                <option :value="fixtureName" x-text="fixtureName"></option>
-              </template>
-            </select>
-            <button type="button" :disabled="!chosen" @click="fetch(`/test-mode/fixtures/${chosen}`).then(r => r.json()).then(data => applyFixture(data))">Load</button>
-            <button type="button" class="test-mode-close" aria-label="Close test mode picker" @click="visible = false">&times;</button>
-          </div>
-          {% endif %}
-          <div class="form-mains">
-            <div>
-              <label for="method" class="label-major">Calculation method:</label>
-              <select id="method" name="method" class="input-text" x-model="method" required>
-                {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-              </select>
-            </div>
-
-            <div>
-              <label for="name" class="label-major">Name (optional):</label>
-              <input type="text" id="name" name="name" class="input-text" x-ref="name">
-            </div>
-
-            <div>
-              <label class="label-major">Namkha type:</label>
-              <div class="radio-toggle">
-                {% for value, text in namkha_types %}
-                <div class="radio-button">
-                  <input
-                    type="radio"
-                    id="type-{{ value }}"
-                    name="namkha_type"
-                    value="{{ value }}"
-                    x-model="namkhaType"
-                    {# TODO: unfreeze MONTH-DAY-HOUR once library calculation functions for those types are ready; revert to method-based gating only #}
-                    :disabled="'{{ value }}' !== 'YEAR'"
-                    {% if value == 'YEAR' %}checked{% endif %}
-                    required
-                  >
-                  <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
-                  {% if value != 'YEAR' %}<span class="coming-soon-cover" aria-hidden="true">Coming soon</span>{% endif %}
+        <button type="button"
+                class="nav-toggle"
+                :aria-expanded="navOpen"
+                aria-controls="primary-nav"
+                @click="navOpen = !navOpen">
+          <span class="sr-only">Menu</span>
+          <span class="nav-toggle-bar" aria-hidden="true"></span>
+          <span class="nav-toggle-bar" aria-hidden="true"></span>
+          <span class="nav-toggle-bar" aria-hidden="true"></span>
+        </button>
+      </div>
+      <nav id="primary-nav" :class="{ 'is-open': navOpen }">
+        <ul>
+          <li><span class="nav-diamond nav-diamond--wood" aria-hidden="true"></span><a href="#about" @click="navOpen = false">About</a></li>
+          <li><span class="nav-diamond nav-diamond--earth" aria-hidden="true"></span><a href="#donate" @click="navOpen = false">Donate</a></li>
+          <li><span class="nav-diamond nav-diamond--fire" aria-hidden="true"></span><a href="https://github.com/NamkhaEncyclopedia/namkha-webapp"
+   target="_blank"
+   rel="noopener noreferrer">Source Code{% include "_external_link_icon.html" %}</a></li>
+          <li><span class="nav-diamond nav-diamond--water" aria-hidden="true"></span><a href="https://namkha-encyclopedia.com/"
+   target="_blank"
+   rel="noopener">Namkha Encyclopedia{% include "_external_link_icon.html" %}</a></li>
+          <li><span class="nav-diamond nav-diamond--metal" aria-hidden="true"></span><a href="#privacy" @click="navOpen = false">Privacy</a></li>
+        </ul>
+      </nav>
+    </header>
+    <div class="container">
+      <h1 class="title" id="calculator" tabindex="-1">Namkha Calculator</h1>
+      <div class="version-badges">
+        <span class="badge-row">
+          <span class="badge"><span class="badge-key">library</span><span class="badge-val">v{{ library_version }}</span></span>
+          {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
+        </span>
+        <span class="badge-row">
+          <span class="badge"><span class="badge-key">app</span><span class="badge-val">v{{ app_version }}</span></span>
+          {% if prerelease_label %}<span class="badge-flag">{{ prerelease_label }}</span>{% endif %}
+        </span>
+      </div>
+      <section class="application">
+        <div class="form-container">
+          <form class="calculator-form"
+                hx-post="/calculate"
+                hx-target="#result"
+                hx-swap="innerHTML"
+                hx-disabled-elt="find button[type='submit']"
+                x-data="namkhaForm()"
+                x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })">
+            <input type="hidden" name="session_token" value="{{ session_token }}">
+            {% if test_mode_enabled %}
+              <div class="test-mode-picker"
+                   x-data="{ fixtures: [], chosen: '', visible: true }"
+                   x-init="fetch('/test-mode/fixtures').then(r => r.json()).then(names => fixtures = names)"
+                   x-show="visible">
+                <label for="test-mode-fixture" class="sr-only">Test mode — load sample data</label>
+                <select id="test-mode-fixture" class="input-text" x-model="chosen">
+                  <option value="">Choose a fixture…</option>
+                  <template x-for="fixtureName in fixtures" :key="fixtureName">
+                    <option :value="fixtureName" x-text="fixtureName"></option>
+                  </template>
+                </select>
+                <button type="button"
+                        :disabled="!chosen"
+                        @click="fetch(`/test-mode/fixtures/${chosen}`).then(r => r.json()).then(data => applyFixture(data))">Load</button>
+                <button type="button"
+                        class="test-mode-close"
+                        aria-label="Close test mode picker"
+                        @click="visible = false">&times;</button>
+              </div>
+            {% endif %}
+            <div class="form-mains">
+              <div>
+                <label for="method" class="label-major">Calculation method:</label>
+                <select id="method"
+                        name="method"
+                        class="input-text"
+                        x-model="method"
+                        required>
+                  {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="name" class="label-major">Name (optional):</label>
+                <input type="text" id="name" name="name" class="input-text" x-ref="name">
+              </div>
+              <div>
+                <label class="label-major">Namkha type:</label>
+                <div class="radio-toggle">
+                  {% for value, text in namkha_types %}
+                    <div class="radio-button">
+                      <input type="radio"
+                             id="type-{{ value }}"
+                             name="namkha_type"
+                             value="{{ value }}"
+                             x-model="namkhaType"
+                             {# TODO: unfreeze MONTH-DAY-HOUR once library calculation functions for those types are ready; revert to method-based gating only #}
+                             :disabled="'{{ value }}' !== 'YEAR'"
+                             {% if value == 'YEAR' %}checked{% endif %}
+                             required>
+                      <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
+                      {% if value != 'YEAR' %}<span class="coming-soon-cover" aria-hidden="true">Coming soon</span>{% endif %}
+                    </div>
+                  {% endfor %}
                 </div>
-                {% endfor %}
               </div>
             </div>
-          </div>
-
-          <div class="namkha-data-by-type">
-            <div>
-              <label class="label-major">Gender:</label>
-              <div class="radio-toggle">
-                {% for value, text in genders %}
-                <div class="radio-button">
-                  <input type="radio" id="gender-{{ value }}" name="gender" value="{{ value }}" x-model="gender" {% if value == 'MALE' %}checked{% endif %} required>
-                  <label for="gender-{{ value }}" class="radio-label">{{ text }}</label>
+            <div class="namkha-data-by-type">
+              <div>
+                <label class="label-major">Gender:</label>
+                <div class="radio-toggle">
+                  {% for value, text in genders %}
+                    <div class="radio-button">
+                      <input type="radio"
+                             id="gender-{{ value }}"
+                             name="gender"
+                             value="{{ value }}"
+                             x-model="gender"
+                             {% if value == 'MALE' %}checked{% endif %}
+                             required>
+                      <label for="gender-{{ value }}" class="radio-label">{{ text }}</label>
+                    </div>
+                  {% endfor %}
                 </div>
-                {% endfor %}
               </div>
-            </div>
-
-            <div class="place-field">
-              <label for="place" class="label-major">Birth place:</label>
-              <div class="input-with-spinner">
-                <input
-                  type="text"
-                  id="place"
-                  class="input-text"
-                  autocomplete="off"
-                  :placeholder="manualCoords ? 'Place name (optional)' : 'Start typing a place…'"
-                  :role="manualCoords ? null : 'combobox'"
-                  :aria-controls="manualCoords ? null : 'place-listbox'"
-                  :aria-autocomplete="manualCoords ? null : 'list'"
-                  :aria-expanded="suggestions.length > 0"
-                  :aria-activedescendant="activeIndex >= 0 ? 'place-option-' + activeIndex : null"
-                  x-model="placeQuery"
-                  @input.debounce.400ms="searchPlaces()"
-                  @keydown="onPlaceKeydown($event)"
-                  @blur="closeSuggestions()"
-                >
-                <span class="spinner place-spinner" role="status" aria-label="Searching places" x-show="isSearchingPlaces" x-cloak></span>
-              </div>
-              <!-- Place field text submits as the location name (both modes). -->
-              <input type="hidden" name="location_name" :value="placeQuery">
-              <ul class="suggestion-list" id="place-listbox" role="listbox" x-show="suggestions.length" x-cloak>
-                <template x-for="(suggestion, index) in suggestions" :key="suggestion.label + suggestion.lat">
-                  <li
-                    class="place-suggestion"
-                    role="option"
-                    :id="'place-option-' + index"
-                    :aria-selected="index === activeIndex"
-                    :class="{ 'is-active': index === activeIndex }"
-                    @mousedown.prevent="selectPlace(suggestion)"
-                  >
-                    <span x-text="suggestion.label"></span>
-                    <small x-text="'Latitude: ' + suggestion.lat.toFixed(2) + ', Longitude: ' + suggestion.lon.toFixed(2)"></small>
-                  </li>
-                </template>
-              </ul>
-              <p class="place-status" role="alert" x-show="placesError" x-cloak x-text="placesError"></p>
-              <p class="place-status" role="status" x-show="!isSearchingPlaces && !placesError && placeQuery.trim().length >= 3 && suggestions.length === 0" x-cloak>No places found.</p>
-
-              <div class="input-columns">
+              <div class="place-field">
+                <label for="place" class="label-major">Birth place:</label>
+                <div class="input-with-spinner">
+                  <input type="text"
+                         id="place"
+                         class="input-text"
+                         autocomplete="off"
+                         :placeholder="manualCoords ? 'Place name (optional)' : 'Start typing a place…'"
+                         :role="manualCoords ? null : 'combobox'"
+                         :aria-controls="manualCoords ? null : 'place-listbox'"
+                         :aria-autocomplete="manualCoords ? null : 'list'"
+                         :aria-expanded="suggestions.length > 0"
+                         :aria-activedescendant="activeIndex >= 0 ? 'place-option-' + activeIndex : null"
+                         x-model="placeQuery"
+                         @input.debounce.400ms="searchPlaces()"
+                         @keydown="onPlaceKeydown($event)"
+                         @blur="closeSuggestions()">
+                  <span class="spinner place-spinner"
+                        role="status"
+                        aria-label="Searching places"
+                        x-show="isSearchingPlaces"
+                        x-cloak></span>
+                </div>
+                <!-- Place field text submits as the location name (both modes). -->
+                <input type="hidden" name="location_name" :value="placeQuery">
+                <ul class="suggestion-list"
+                    id="place-listbox"
+                    role="listbox"
+                    x-show="suggestions.length"
+                    x-cloak>
+                  <template x-for="(suggestion, index) in suggestions"
+                            :key="suggestion.label + suggestion.lat">
+                    <li class="place-suggestion"
+                        role="option"
+                        :id="'place-option-' + index"
+                        :aria-selected="index === activeIndex"
+                        :class="{ 'is-active': index === activeIndex }"
+                        @mousedown.prevent="selectPlace(suggestion)">
+                      <span x-text="suggestion.label"></span>
+                      <small x-text="'Latitude: ' + suggestion.lat.toFixed(2) + ', Longitude: ' + suggestion.lon.toFixed(2)"></small>
+                    </li>
+                  </template>
+                </ul>
+                <p class="place-status"
+                   role="alert"
+                   x-show="placesError"
+                   x-cloak
+                   x-text="placesError"></p>
+                <p class="place-status"
+                   role="status"
+                   x-show="!isSearchingPlaces && !placesError && placeQuery.trim().length >= 3 && suggestions.length === 0"
+                   x-cloak>No places found.</p>
+                <div class="input-columns">
+                  <div>
+                    <label for="latitude-ui">Latitude:</label>
+                    <input type="number"
+                           step="any"
+                           min="-90"
+                           max="90"
+                           id="latitude-ui"
+                           class="input-text"
+                           x-model="latitude"
+                           :disabled="!manualCoords"
+                           @change="fetchTimezone()">
+                    <input type="hidden" name="latitude" :value="latitude">
+                  </div>
+                  <div>
+                    <label for="longitude-ui">Longitude:</label>
+                    <input type="number"
+                           step="any"
+                           min="-180"
+                           max="180"
+                           id="longitude-ui"
+                           class="input-text"
+                           x-model="longitude"
+                           :disabled="!manualCoords"
+                           @change="fetchTimezone()">
+                    <input type="hidden" name="longitude" :value="longitude">
+                  </div>
+                </div>
                 <div>
-                  <label for="latitude-ui">Latitude:</label>
-                  <input
-                    type="number" step="any" min="-90" max="90"
-                    id="latitude-ui" class="input-text"
-                    x-model="latitude" :disabled="!manualCoords" @change="fetchTimezone()"
-                  >
-                  <input type="hidden" name="latitude" :value="latitude">
-                </div>
-                <div>
-                  <label for="longitude-ui">Longitude:</label>
-                  <input
-                    type="number" step="any" min="-180" max="180"
-                    id="longitude-ui" class="input-text"
-                    x-model="longitude" :disabled="!manualCoords" @change="fetchTimezone()"
-                  >
-                  <input type="hidden" name="longitude" :value="longitude">
+                  <label class="additional-checkbox">
+                    <input type="checkbox" x-model="manualCoords">
+                    <span>Manually set coordinates</span>
+                  </label>
+                  <span class="help-tip">
+                    <button type="button"
+                            class="help-trigger"
+                            aria-label="Help"
+                            aria-describedby="tip-coords"
+                            @mouseenter="positionTip($event)"
+                            @focus="positionTip($event)">?</button>
+                    <span role="tooltip" id="tip-coords" class="help-text help-text--end">If the place of birth is not displayed as a suggestion, you can specify the coordinates manually in “Decimal degrees” (DD) format.</span>
+                  </span>
                 </div>
               </div>
               <div>
-                <label class="additional-checkbox">
-                  <input type="checkbox" x-model="manualCoords">
-                  <span>Manually set coordinates</span>
-                </label>
-                <span class="help-tip">
-                  <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-coords" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
-                  <span role="tooltip" id="tip-coords" class="help-text help-text--end">If the place of birth is not displayed as a suggestion, you can specify the coordinates manually in “Decimal degrees” (DD) format.</span>
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <label for="birth_date" class="label-major">Day of birth:</label>
-              <input type="date" id="birth_date" name="birth_date" class="input-text" required x-ref="birthDate">
-              <div class="input-columns">
-                <div>
-                  <label for="birth_time" class="label-major">Birth time:</label>
-                  <input type="time" id="birth_time" name="birth_time" class="input-text" required x-ref="birthTime">
+                <label for="birth_date" class="label-major">Day of birth:</label>
+                <input type="date"
+                       id="birth_date"
+                       name="birth_date"
+                       class="input-text"
+                       required
+                       x-ref="birthDate">
+                <div class="input-columns">
+                  <div>
+                    <label for="birth_time" class="label-major">Birth time:</label>
+                    <input type="time"
+                           id="birth_time"
+                           name="birth_time"
+                           class="input-text"
+                           required
+                           x-ref="birthTime">
+                  </div>
+                  <div>
+                    <label for="timezone-mode">Birth time zone:</label>
+                    <span class="help-tip">
+                      <button type="button"
+                              class="help-trigger"
+                              aria-label="Help"
+                              aria-describedby="tip-timezone"
+                              @mouseenter="positionTip($event)"
+                              @focus="positionTip($event)">?</button>
+                      <span role="tooltip" id="tip-timezone" class="help-text">By default the time zone (including summer time) is determined from the birth place and date, even for historical dates; the sheet notes any uncertainty. Pick a zone or enter a UTC offset only if you are certain the clock at birth followed it.</span>
+                    </span>
+                    <select id="timezone-mode" class="input-text" x-model="timezoneMode">
+                      <option value="auto">Automatic</option>
+                      <option value="list">Choose from list</option>
+                      <option value="offset">UTC offset</option>
+                    </select>
+                    <!-- Automatic mode submits neither field; the library derives the zone from birth place and date. -->
+                    <input type="hidden"
+                           name="timezone"
+                           :value="timezoneMode === 'list' ? timezone : ''">
+                    <input type="hidden"
+                           name="utc_offset"
+                           :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
+                  </div>
                 </div>
-                <div>
-                  <label for="timezone-mode">Birth time zone:</label>
+                <template x-if="timezoneMode === 'auto'">
+                  <p class="timezone-detected"
+                     role="status"
+                     x-text="detectedTimezone ? 'Detected: ' + detectedTimezone : 'Determined from the birth place and date.'">
+                  </p>
+                </template>
+                <template x-if="timezoneMode === 'list'">
+                  <div class="timezone-search">
+                    <label for="timezone-search" class="sr-only">Search time zones</label>
+                    <input type="text"
+                           id="timezone-search"
+                           class="input-text"
+                           autocomplete="off"
+                           placeholder="Start typing a time zone…"
+                           role="combobox"
+                           aria-controls="timezone-listbox"
+                           aria-autocomplete="list"
+                           :aria-expanded="timezoneSuggestions.length > 0"
+                           :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
+                           x-model="timezoneQuery"
+                           x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
+                           @input="searchTimezones()"
+                           @keydown="onTimezoneKeydown($event)"
+                           @blur="commitTimezoneOnBlur()">
+                    <ul class="suggestion-list"
+                        id="timezone-listbox"
+                        role="listbox"
+                        x-show="timezoneSuggestions.length"
+                        x-cloak>
+                      <template x-for="(option, index) in timezoneSuggestions" :key="option.key">
+                        <li class="timezone-suggestion"
+                            role="option"
+                            :id="'timezone-option-' + index"
+                            :aria-selected="index === timezoneActiveIndex"
+                            :class="{ 'is-active': index === timezoneActiveIndex }"
+                            @mousedown.prevent="selectTimezone(option)">
+                          <span x-text="option.label"></span>
+                        </li>
+                      </template>
+                    </ul>
+                  </div>
+                </template>
+                <template x-if="timezoneMode === 'offset'">
+                  <div class="utc-offset-field">
+                    <span class="utc-offset-prefix" aria-hidden="true">UTC</span>
+                    <label for="utc-offset-sign" class="sr-only">Offset direction</label>
+                    <select id="utc-offset-sign"
+                            class="input-text utc-offset-sign"
+                            x-model="utcOffsetSign">
+                      <option value="+">+</option>
+                      <option value="-">-</option>
+                    </select>
+                    <label for="utc-offset-time" class="sr-only">Offset hours and minutes</label>
+                    <input type="text"
+                           id="utc-offset-time"
+                           class="input-text utc-offset-time"
+                           inputmode="numeric"
+                           placeholder="5:45"
+                           required
+                           pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
+                           title="Hours 0 to 16, with optional minutes, like 5:45"
+                           x-model="utcOffsetTime"
+                           x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')">
+                  </div>
+                </template>
+                <div class="summer-time-field" x-show="timezoneMode !== 'offset'">
+                  <label for="on_summer_time">Summer time (DST) at birth:</label>
                   <span class="help-tip">
-                    <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-timezone" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
-                    <span role="tooltip" id="tip-timezone" class="help-text">By default the time zone (including summer time) is determined from the birth place and date, even for historical dates; the sheet notes any uncertainty. Pick a zone or enter a UTC offset only if you are certain the clock at birth followed it.</span>
+                    <button type="button"
+                            class="help-trigger"
+                            aria-label="Help"
+                            aria-describedby="tip-summer-time"
+                            @mouseenter="positionTip($event)"
+                            @focus="positionTip($event)">?</button>
+                    <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
                   </span>
-                  <select id="timezone-mode" class="input-text" x-model="timezoneMode">
-                    <option value="auto">Automatic</option>
-                    <option value="list">Choose from list</option>
-                    <option value="offset">UTC offset</option>
+                  <!-- A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. -->
+                  <select id="on_summer_time"
+                          name="on_summer_time"
+                          class="input-text"
+                          x-model="onSummerTime"
+                          :disabled="timezoneMode === 'offset'">
+                    <option value="">Not sure</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
                   </select>
-                  <!-- Automatic mode submits neither field; the library derives the zone from birth place and date. -->
-                  <input type="hidden" name="timezone" :value="timezoneMode === 'list' ? timezone : ''">
-                  <input type="hidden" name="utc_offset" :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
                 </div>
-              </div>
-
-              <template x-if="timezoneMode === 'auto'">
-                <p class="timezone-detected" role="status" x-text="detectedTimezone ? 'Detected: ' + detectedTimezone : 'Determined from the birth place and date.'"></p>
-              </template>
-              <template x-if="timezoneMode === 'list'">
-                <div class="timezone-search">
-                  <label for="timezone-search" class="sr-only">Search time zones</label>
-                  <input
-                    type="text" id="timezone-search" class="input-text"
-                    autocomplete="off"
-                    placeholder="Start typing a time zone…"
-                    role="combobox"
-                    aria-controls="timezone-listbox"
-                    aria-autocomplete="list"
-                    :aria-expanded="timezoneSuggestions.length > 0"
-                    :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
-                    x-model="timezoneQuery"
-                    x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
-                    @input="searchTimezones()"
-                    @keydown="onTimezoneKeydown($event)"
-                    @blur="commitTimezoneOnBlur()"
-                  >
-                  <ul class="suggestion-list" id="timezone-listbox" role="listbox" x-show="timezoneSuggestions.length" x-cloak>
-                    <template x-for="(option, index) in timezoneSuggestions" :key="option.key">
-                      <li
-                        class="timezone-suggestion"
-                        role="option"
-                        :id="'timezone-option-' + index"
-                        :aria-selected="index === timezoneActiveIndex"
-                        :class="{ 'is-active': index === timezoneActiveIndex }"
-                        @mousedown.prevent="selectTimezone(option)"
-                      >
-                        <span x-text="option.label"></span>
-                      </li>
-                    </template>
-                  </ul>
+                <div class="inline-tooltip"
+                     role="alert"
+                     x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)"
+                     x-cloak>
+                  <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
+                  with a precision of at least 10 minutes. Please do a western astrology birth chart
+                  rectification if you are unsure.
                 </div>
-              </template>
-              <template x-if="timezoneMode === 'offset'">
-                <div class="utc-offset-field">
-                  <span class="utc-offset-prefix" aria-hidden="true">UTC</span>
-                  <label for="utc-offset-sign" class="sr-only">Offset direction</label>
-                  <select id="utc-offset-sign" class="input-text utc-offset-sign" x-model="utcOffsetSign">
-                    <option value="+">+</option>
-                    <option value="-">-</option>
-                  </select>
-                  <label for="utc-offset-time" class="sr-only">Offset hours and minutes</label>
-                  <input
-                    type="text" id="utc-offset-time" class="input-text utc-offset-time"
-                    inputmode="numeric" placeholder="5:45" required
-                    pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
-                    title="Hours 0 to 16, with optional minutes, like 5:45"
-                    x-model="utcOffsetTime"
-                    x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')"
-                  >
-                </div>
-              </template>
-
-              <div class="summer-time-field" x-show="timezoneMode !== 'offset'">
-                <label for="on_summer_time">Summer time (DST) at birth:</label>
-                <span class="help-tip">
-                  <button type="button" class="help-trigger" aria-label="Help" aria-describedby="tip-summer-time" @mouseenter="positionTip($event)" @focus="positionTip($event)">?</button>
-                  <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
-                </span>
-                <!-- A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. -->
-                <select id="on_summer_time" name="on_summer_time" class="input-text" x-model="onSummerTime" :disabled="timezoneMode === 'offset'">
-                  <option value="">Not sure</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </div>
-
-              <div class="inline-tooltip" role="alert" x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)" x-cloak>
-                <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
-                with a precision of at least 10 minutes. Please do a western astrology birth chart
-                rectification if you are unsure.
               </div>
             </div>
-          </div>
-
-          <div class="form-mains">
-            <div class="input-columns">
-              <button type="button" class="button-reset" @click="resetForm()">Reset</button>
-              <button type="submit">
-                <img class="icon-calculate" src="/static/img/calculate.svg" alt="">
-                <span class="spinner htmx-indicator" role="status" aria-label="Calculating"></span>
-                Calculate
-              </button>
+            <div class="form-mains">
+              <div class="input-columns">
+                <button type="button" class="button-reset" @click="resetForm()">Reset</button>
+                <button type="submit">
+                  <img class="icon-calculate" src="/static/img/calculate.svg" alt="">
+                  <span class="spinner htmx-indicator" role="status" aria-label="Calculating"></span>
+                  Calculate
+                </button>
+              </div>
             </div>
-          </div>
-        </form>
-      </div>
-
-      <div id="result" class="result" role="region" aria-live="polite" aria-label="Calculation result"></div>
-      <template id="result-placeholder">
-        <div class="diagrams">
-          <div class="image-holder"><img src="/static/img/logo_blurred_ink.svg" alt=""></div>
+          </form>
         </div>
-      </template>
-    </section>
-
-    {% include "_about.html" %}
-
-    {% include "_donate.html" %}
-
-    {% include "_privacy.html" %}
-  </div>
-
-  <footer>
-    <div class="container">
-      <a href="#" onclick="scrollToTop(); return false;">
-        <img class="logo" src="/static/img/logo.svg" alt="Back to top">
-      </a>
-      <p class="footer-legal">
-        &copy; {{ current_year }}
-        <a href="https://namkha-encyclopedia.com" target="_blank" rel="noopener noreferrer">Namkha Encyclopedia</a>.
-        Licensed under the
-        <a href="https://github.com/NamkhaEncyclopedia/namkha-webapp/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GNU General Public License, version 3 or later</a>.
-      </p>
+        <div id="result"
+             class="result"
+             role="region"
+             aria-live="polite"
+             aria-label="Calculation result"></div>
+        <template id="result-placeholder">
+          <div class="diagrams">
+            <div class="image-holder">
+              <img src="/static/img/logo_blurred_ink.svg" alt="">
+            </div>
+          </div>
+        </template>
+      </section>
+      {% include "_about.html" %}
+      {% include "_donate.html" %}
+      {% include "_privacy.html" %}
     </div>
-  </footer>
-
-  <script type="application/json" id="timezone-options">{{ timezones | tojson }}</script>
-  <script>
+    <footer>
+      <div class="container">
+        <a href="#" onclick="scrollToTop(); return false;">
+          <img class="logo" src="/static/img/logo.svg" alt="Back to top">
+        </a>
+        <p class="footer-legal">
+          &copy; {{ current_year }}
+          <a href="https://namkha-encyclopedia.com"
+             target="_blank"
+             rel="noopener noreferrer">Namkha Encyclopedia</a>.
+          Licensed under the
+          <a href="https://github.com/NamkhaEncyclopedia/namkha-webapp/blob/main/LICENSE"
+             target="_blank"
+             rel="noopener noreferrer">GNU General Public License, version 3 or later</a>.
+        </p>
+      </div>
+    </footer>
+    <script type="application/json" id="timezone-options">{{ timezones | tojson }}</script>
+    <script>
     function scrollToTop() {
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
@@ -663,37 +744,85 @@
         },
       };
     }
-  </script>
-
-  <!-- Zoom lightbox: a tapped/clicked result page opens here, pan- and
+    </script>
+    <!-- Zoom lightbox: a tapped/clicked result page opens here, pan- and
        pinch-zoomable on a dark blurred backdrop. -->
-  <div id="lightbox" role="dialog" aria-modal="true" aria-label="Enlarged calculation page" aria-hidden="true">
-    <button type="button" class="lightbox-btn lightbox-close" data-lightbox-close aria-label="Close enlarged view">&#x2715;</button>
-    <!-- Pointer-device hint only: the touch gestures (pinch, drag) need no telling. -->
-    <p class="lightbox-hint">
-      <span>Ctrl + scroll to zoom</span>
-      <span>Shift + scroll sideways</span>
-      <span>Drag to pan</span>
-      <button type="button" class="lightbox-hint-close" data-lightbox-hint-close aria-label="Hide the controls hint">&#x2715;</button>
-    </p>
-    <div class="lightbox-stage" data-lightbox-stage></div>
-    <!-- Page turners: shown only when the result has more than one page, and only
+    <div id="lightbox"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Enlarged calculation page"
+         aria-hidden="true">
+      <button type="button"
+              class="lightbox-btn lightbox-close"
+              data-lightbox-close
+              aria-label="Close enlarged view">&#x2715;</button>
+      <!-- Pointer-device hint only: the touch gestures (pinch, drag) need no telling. -->
+      <p class="lightbox-hint">
+        <span>Ctrl + scroll to zoom</span>
+        <span>Shift + scroll sideways</span>
+        <span>Drag to pan</span>
+        <button type="button"
+                class="lightbox-hint-close"
+                data-lightbox-hint-close
+                aria-label="Hide the controls hint">&#x2715;</button>
+      </p>
+      <div class="lightbox-stage" data-lightbox-stage></div>
+      <!-- Page turners: shown only when the result has more than one page, and only
          on pointer devices — touch swipes left/right instead. -->
-    <!-- Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
+      <!-- Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
          so a text arrow looks pushed down however the button centres it. -->
-    <button type="button" class="lightbox-btn lightbox-nav lightbox-nav-prev" data-lightbox-page="prev" aria-label="Previous page" hidden>
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4 7 12l8 8"/></svg>
-    </button>
-    <button type="button" class="lightbox-btn lightbox-nav lightbox-nav-next" data-lightbox-page="next" aria-label="Next page" hidden>
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4l8 8-8 8"/></svg>
-    </button>
-    <div class="lightbox-controls">
-      <button type="button" class="lightbox-btn" data-lightbox-zoom="-1" aria-label="Zoom out">&#8722;</button>
-      <button type="button" class="lightbox-btn" data-lightbox-zoom="fit" aria-label="Fit page width" aria-pressed="false">&#x2922;</button>
-      <button type="button" class="lightbox-btn" data-lightbox-zoom="1" aria-label="Zoom in">&#43;</button>
+      <button type="button"
+              class="lightbox-btn lightbox-nav lightbox-nav-prev"
+              data-lightbox-page="prev"
+              aria-label="Previous page"
+              hidden>
+        <svg viewBox="0 0 24 24"
+             width="22"
+             height="22"
+             aria-hidden="true"
+             focusable="false"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2.25"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M15 4 7 12l8 8" />
+        </svg>
+      </button>
+      <button type="button"
+              class="lightbox-btn lightbox-nav lightbox-nav-next"
+              data-lightbox-page="next"
+              aria-label="Next page"
+              hidden>
+        <svg viewBox="0 0 24 24"
+             width="22"
+             height="22"
+             aria-hidden="true"
+             focusable="false"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2.25"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M9 4l8 8-8 8" />
+        </svg>
+      </button>
+      <div class="lightbox-controls">
+        <button type="button"
+                class="lightbox-btn"
+                data-lightbox-zoom="-1"
+                aria-label="Zoom out">&#8722;</button>
+        <button type="button"
+                class="lightbox-btn"
+                data-lightbox-zoom="fit"
+                aria-label="Fit page width"
+                aria-pressed="false">&#x2922;</button>
+        <button type="button"
+                class="lightbox-btn"
+                data-lightbox-zoom="1"
+                aria-label="Zoom in">&#43;</button>
+      </div>
     </div>
-  </div>
-
-  <script src="/static/lightbox.js"></script>
-</body>
+    <script src="/static/lightbox.js"></script>
+  </body>
 </html>

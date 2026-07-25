@@ -12,7 +12,9 @@
   background: rgba(20, 8, 20, 0.82);
   touch-action: none; /* we handle pinch/pan ourselves */
 }
-#lightbox[data-open] { display: block; }
+#lightbox[data-open] {
+  display: block;
+}
 #lightbox::before {
   content: "";
   position: absolute;
@@ -22,11 +24,17 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  #lightbox[data-open] { animation: lightbox-fade 0.15s ease-out; }
+  #lightbox[data-open] {
+    animation: lightbox-fade 0.15s ease-out;
+  }
 }
 @keyframes lightbox-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* The pan/zoom viewport fills the overlay; the stage inside is transformed. */
@@ -41,9 +49,13 @@
   user-select: none;
 }
 .lightbox-stage svg,
-.lightbox-stage img { cursor: grab; }
+.lightbox-stage img {
+  cursor: grab;
+}
 .lightbox-stage[data-grabbing] svg,
-.lightbox-stage[data-grabbing] img { cursor: grabbing; }
+.lightbox-stage[data-grabbing] img {
+  cursor: grabbing;
+}
 .lightbox-stage svg,
 .lightbox-stage img {
   display: block;
@@ -90,7 +102,9 @@
   border-radius: 0.5rem;
   cursor: pointer;
 }
-.lightbox-btn:hover { background: rgba(0, 0, 0, 0.7); }
+.lightbox-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
 .lightbox-btn:focus-visible {
   outline: 3px solid var(--radio-focus-ring);
   outline-offset: 2px;
@@ -105,9 +119,15 @@
   z-index: 2;
   border-radius: 50%;
 }
-.lightbox-nav svg { display: block; }
-.lightbox-nav-prev { left: max(1rem, env(safe-area-inset-left)); }
-.lightbox-nav-next { right: max(1rem, env(safe-area-inset-right)); }
+.lightbox-nav svg {
+  display: block;
+}
+.lightbox-nav-prev {
+  left: max(1rem, env(safe-area-inset-left));
+}
+.lightbox-nav-next {
+  right: max(1rem, env(safe-area-inset-right));
+}
 .lightbox-nav:disabled {
   opacity: 0.35;
   cursor: default;
@@ -115,12 +135,20 @@
 @media (prefers-reduced-motion: no-preference) {
   /* Zooming moves the buttons between the sheet edge and the window edge
      (lightbox.js sets left/right): slide, don't jump. */
-  .lightbox-nav { transition: left 0.18s ease-out, right 0.18s ease-out; }
+  .lightbox-nav {
+    transition:
+      left 0.18s ease-out,
+      right 0.18s ease-out;
+  }
 }
-.lightbox-nav[hidden] { display: none; }
+.lightbox-nav[hidden] {
+  display: none;
+}
 /* Touch turns pages by swiping, so the buttons would only cover the sheet. */
 @media (hover: none), (pointer: coarse) {
-  .lightbox-nav { display: none; }
+  .lightbox-nav {
+    display: none;
+  }
 }
 
 .lightbox-close {
@@ -158,7 +186,9 @@
   border-radius: 0.4rem;
   pointer-events: none; /* only the dismiss button takes clicks */
 }
-.lightbox-hint[hidden] { display: none; }
+.lightbox-hint[hidden] {
+  display: none;
+}
 /* Hairline rule between tips (and before the dismiss button). */
 .lightbox-hint > * + * {
   margin-left: 0.6rem;
@@ -175,12 +205,16 @@
   cursor: pointer;
   pointer-events: auto;
 }
-.lightbox-hint-close:hover { color: #fff; }
+.lightbox-hint-close:hover {
+  color: #fff;
+}
 .lightbox-hint-close:focus-visible {
   outline: 2px solid var(--radio-focus-ring);
   outline-offset: 2px;
 }
 /* No wheel to speak of (touch), or no room for the single line: drop the hint. */
 @media (hover: none), (pointer: coarse), (max-width: 34rem) {
-  .lightbox-hint { display: none; }
+  .lightbox-hint {
+    display: none;
+  }
 }
