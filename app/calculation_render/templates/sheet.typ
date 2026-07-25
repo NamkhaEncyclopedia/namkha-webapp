@@ -7,8 +7,14 @@
 
 #let data = json("data.json")
 
+// Bounds the subject name in the footer/title so a long free-text entry
+// can't push the footer line past the page margins.
+#let footer-name-limit = 22
+#let footer-name = if data.subject.name.len() > footer-name-limit {
+  data.subject.name.slice(0, footer-name-limit) + "…"
+} else { data.subject.name }
 #let name-suffix = if data.subject.name != "—" {
-  ": " + data.subject.name
+  ": " + footer-name
 } else { "" }
 #let sheet-title = (
   data.meta.type
@@ -16,6 +22,10 @@
     + data.meta.method
     + ")"
     + name-suffix
+)
+// Footer omits "Calculation" to save horizontal space for the subject name.
+#let footer-title = (
+  data.meta.type + " Namkha (" + data.meta.method + ")" + name-suffix
 )
 #let sheet-author = (
   "Namkha Calculator (lib: "
@@ -38,7 +48,7 @@
     set text(size: 8pt, fill: rgb("#666666"))
     align(
       center,
-      [#sheet-title | namkha-calculator #data.meta.version | Page #counter(page).display() of #counter(page).final().first()],
+      [#footer-title | #underline(link("https://calculator.namkha-encyclopedia.com/")[Namkha Calculator]) (lib: #data.meta.version, app: #data.meta.app_version) | Page #counter(page).display() of #counter(page).final().first()],
     )
   },
 )
