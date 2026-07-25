@@ -55,6 +55,13 @@ line-length = 88
 # pyflakes, pycodestyle, isort, pyupgrade, bugbear
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.djlint]
+profile = "jinja"
+indent = 2
+# J004: static urls intentionally hardcoded as /static/... (see CLAUDE.local.md), not url_for.
+# H023: entity refs (&times;, &copy;, &#x2715; etc.) are used deliberately, not accidental.
+ignore = "J004,H023"
+
 [tool.mypy]
 python_version = "3.13"
 ignore_missing_imports = true          # skyfield/typst/namkha_calculator untyped
