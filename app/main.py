@@ -9,7 +9,7 @@ import re
 import secrets
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import lru_cache
@@ -193,17 +193,56 @@ async def _compile_slot(route: str):
 # blocks copy-pasted curl commands that never load the page at all, and tokens
 # leaked or copy-pasted to a different client.
 SESSION_TOKEN_TTL = 1800.0  # seconds; long enough to fill the form unhurried
-_session_tokens: dict[str, tuple[str, float]] = {}  # token -> (client, issued_at)
+# Hard cap on the store, so many distinct clients minting fresh tokens can't grow
+# it without bound -- TTL alone doesn't bound anything, since a flood of tokens is
+# by definition not yet expired. At the cap the oldest live token is evicted to
+# make room, which is a reload for whoever held it, not a failed calculation.
+MAX_SESSION_TOKENS = 4096
+# Per-client cap, so one address can't fill the store on its own and push every
+# other visitor out. Deliberately generous: _client_ip buckets a whole office,
+# school or mobile carrier behind one NAT address, and they legitimately share it.
+MAX_TOKENS_PER_CLIENT = 32
+# token -> (client, issued_at), oldest first. Insertion order is issue order
+# (issued_at ascending) and MUST stay that way -- the sweep below reads it as
+# such; never move_to_end here (unlike _result_cache) or the sweep breaks.
+_session_tokens: OrderedDict[str, tuple[str, float]] = OrderedDict()
+# client -> its own tokens, oldest first. Only an index into _session_tokens, kept
+# so both caps are enforced without scanning the whole store on every GET / --
+# that scan is the CPU churn the caps are here to prevent in the first place.
+_client_tokens: dict[str, deque[str]] = {}
+
+
+def _drop_session_token(token: str) -> None:
+    """Forget a token, keeping the per-client index in step with the store."""
+    issued_client, _issued_at = _session_tokens.pop(token)
+    client_tokens = _client_tokens[issued_client]
+    client_tokens.remove(token)  # at most MAX_TOKENS_PER_CLIENT long
+    if not client_tokens:
+        del _client_tokens[issued_client]
 
 
 def _issue_session_token(client: str) -> str:
-    if len(_session_tokens) > 4096:  # sweep stale, so the dict can't grow unbounded
-        now = time.monotonic()
-        for token, (_, issued_at) in list(_session_tokens.items()):
-            if now - issued_at >= SESSION_TOKEN_TTL:
-                del _session_tokens[token]
+    now = time.monotonic()
+    # Expired tokens are the oldest ones, so they sit at the front: drop until the
+    # front is live again. Costs one step per token actually evicted, not a scan.
+    while _session_tokens:
+        oldest, (_, issued_at) = next(iter(_session_tokens.items()))
+        if now - issued_at < SESSION_TOKEN_TTL:
+            break
+        _drop_session_token(oldest)
+    # Trim this client to one below its cap, since a fresh token follows. Only
+    # once the store is filling up: the cap is about one client crowding the
+    # others out, and with room to spare nobody is being crowded.
+    if len(_session_tokens) >= MAX_SESSION_TOKENS // 2:
+        client_tokens = _client_tokens.get(client)
+        while client_tokens and len(client_tokens) >= MAX_TOKENS_PER_CLIENT:
+            _drop_session_token(client_tokens[0])
+    # Whole store still over the hard cap (many distinct clients): oldest goes.
+    while len(_session_tokens) >= MAX_SESSION_TOKENS:
+        _drop_session_token(next(iter(_session_tokens)))
     token = secrets.token_urlsafe(32)
-    _session_tokens[token] = (client, time.monotonic())
+    _session_tokens[token] = (client, now)
+    _client_tokens.setdefault(client, deque()).append(token)
     return token
 
 

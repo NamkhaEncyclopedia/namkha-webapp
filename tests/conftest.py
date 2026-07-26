@@ -208,7 +208,10 @@ def _reset_result_cache():
 @pytest.fixture(autouse=True)
 def _reset_session_tokens():
     """Tokens minted by GET / (see main._issue_session_token) are also
-    process-global state; reset them around every test."""
+    process-global state; reset them -- and their per-client index -- around
+    every test."""
     main._session_tokens.clear()
+    main._client_tokens.clear()
     yield
     main._session_tokens.clear()
+    main._client_tokens.clear()

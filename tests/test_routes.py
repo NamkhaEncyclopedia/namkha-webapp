@@ -134,6 +134,69 @@ def test_index_issues_usable_session_token(client, fixture_form):
     assert response.status_code == 200
 
 
+def test_session_token_store_is_hard_capped(monkeypatch):
+    """Distinct clients minting fresh (unexpired) tokens can't grow the store
+    past the cap; the oldest tokens go first."""
+    monkeypatch.setattr(main, "MAX_SESSION_TOKENS", 8)
+    tokens = [main._issue_session_token(f"client-{i}") for i in range(20)]
+    assert len(main._session_tokens) == main.MAX_SESSION_TOKENS
+    kept = [token for token in tokens if token in main._session_tokens]
+    assert kept == tokens[-main.MAX_SESSION_TOKENS :]
+
+
+def test_session_token_sweep_drops_expired():
+    stale = main._issue_session_token("stale-client")
+    issued_client, issued_at = main._session_tokens[stale]
+    main._session_tokens[stale] = (
+        issued_client,
+        issued_at - main.SESSION_TOKEN_TTL - 1,
+    )
+    fresh = main._issue_session_token("fresh-client")
+    assert stale not in main._session_tokens
+    assert fresh in main._session_tokens
+
+
+def test_session_token_per_client_cap_protects_other_clients(monkeypatch):
+    """One client reloading / in a loop gets trimmed to its own cap instead of
+    evicting everybody else's token."""
+    monkeypatch.setattr(main, "MAX_SESSION_TOKENS", 64)
+    monkeypatch.setattr(main, "MAX_TOKENS_PER_CLIENT", 4)
+    bystander = main._issue_session_token("bystander")
+    for i in range(main.MAX_SESSION_TOKENS // 2):  # put the store under pressure
+        main._issue_session_token(f"visitor-{i}")
+    for _ in range(main.MAX_SESSION_TOKENS):
+        main._issue_session_token("flooder")
+    flooder_tokens = [
+        token
+        for token, (issued_client, _) in main._session_tokens.items()
+        if issued_client == "flooder"
+    ]
+    assert len(flooder_tokens) == main.MAX_TOKENS_PER_CLIENT
+    assert flooder_tokens == list(main._client_tokens["flooder"])
+    assert bystander in main._session_tokens
+
+
+def test_session_tokens_untrimmed_while_the_store_has_room(monkeypatch):
+    """The per-client cap only engages under pressure, so a shared NAT address
+    doesn't evict its own tokens for nothing."""
+    monkeypatch.setattr(main, "MAX_SESSION_TOKENS", 64)
+    monkeypatch.setattr(main, "MAX_TOKENS_PER_CLIENT", 4)
+    tokens = [
+        main._issue_session_token("office-nat")
+        for _ in range(main.MAX_TOKENS_PER_CLIENT * 2)
+    ]
+    assert all(token in main._session_tokens for token in tokens)
+
+
+def test_session_token_client_index_stays_in_step():
+    """_client_tokens is an index into _session_tokens; a drift would leak
+    entries or raise on the next eviction."""
+    for i in range(5):
+        main._issue_session_token(f"client-{i % 2}")
+    indexed = [token for tokens in main._client_tokens.values() for token in tokens]
+    assert sorted(indexed) == sorted(main._session_tokens)
+
+
 # --- calculate_namkha result cache --------------------------------------------------
 
 
