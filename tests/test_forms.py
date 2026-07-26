@@ -13,7 +13,7 @@ from datetime import timedelta
 import namkha_calculator as nc
 import pytest
 
-from app.forms import build_request
+from app.forms import MAX_LOCATION_NAME_LENGTH, MAX_NAME_LENGTH, build_request
 
 
 def _good_form(**overrides):
@@ -45,6 +45,39 @@ def test_happy_path_builds_request():
 def test_blank_name_becomes_none(name_value):
     request = build_request(_good_form(name=name_value))
     assert request.subject.name is None
+
+
+@pytest.mark.parametrize(
+    "field, limit, message",
+    [
+        ("name", MAX_NAME_LENGTH, "Name must be 100 characters or fewer."),
+        (
+            "location_name",
+            MAX_LOCATION_NAME_LENGTH,
+            "Birth place must be 200 characters or fewer.",
+        ),
+    ],
+)
+def test_free_text_fields_are_length_capped(field, limit, message):
+    """maxlength on the input is bypassable by a direct POST, so the cap has to
+    hold here too -- an unbounded name lands in the PDF download filename."""
+    with pytest.raises(ValueError, match=re.escape(message)):
+        build_request(_good_form(**{field: "x" * (limit + 1)}))
+
+
+@pytest.mark.parametrize(
+    "field, limit",
+    [("name", MAX_NAME_LENGTH), ("location_name", MAX_LOCATION_NAME_LENGTH)],
+)
+def test_free_text_fields_accept_the_limit_exactly(field, limit):
+    build_request(_good_form(**{field: "x" * limit}))
+
+
+def test_length_cap_counts_characters_not_bytes():
+    """A Tibetan name must get the same allowance as an ASCII one; counting
+    bytes would cut it to a third."""
+    request = build_request(_good_form(name="ཀ" * MAX_NAME_LENGTH))
+    assert request.subject.name is not None
 
 
 def test_location_name_sets_location_name():

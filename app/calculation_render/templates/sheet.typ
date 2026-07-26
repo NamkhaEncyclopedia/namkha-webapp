@@ -8,10 +8,14 @@
 #let data = json("data.json")
 
 // Bounds the subject name in the footer/title so a long free-text entry
-// can't push the footer line past the page margins.
+// can't push the footer line past the page margins. Counted in grapheme
+// clusters, not bytes: str.len() and str.slice() are byte-based, and a cut
+// landing mid-character is a hard error ("not a character boundary") that
+// accented, Cyrillic and Tibetan names hit routinely.
 #let footer-name-limit = 22
-#let footer-name = if data.subject.name.len() > footer-name-limit {
-  data.subject.name.slice(0, footer-name-limit) + "…"
+#let footer-name-clusters = data.subject.name.clusters()
+#let footer-name = if footer-name-clusters.len() > footer-name-limit {
+  footer-name-clusters.slice(0, footer-name-limit).join() + "…"
 } else { data.subject.name }
 #let name-suffix = if data.subject.name != "—" {
   ": " + footer-name

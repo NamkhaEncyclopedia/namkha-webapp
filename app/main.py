@@ -26,7 +26,13 @@ from starlette.concurrency import run_in_threadpool
 from app import constants, turnstile
 from app.calculation_render import render_pdf, render_svg
 from app.event_log import configure_logging, log_event
-from app.forms import FIELDS, NamkhaRequest, build_request
+from app.forms import (
+    FIELDS,
+    MAX_LOCATION_NAME_LENGTH,
+    MAX_NAME_LENGTH,
+    NamkhaRequest,
+    build_request,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -382,6 +388,9 @@ async def index(request: Request):
             "test_mode_enabled": TEST_MODE_ENABLED,
             "session_token": _issue_session_token(_client_ip(request)),
             "turnstile_sitekey": constants.TURNSTILE_SITEKEY,
+            # Same caps build_request enforces, so the two can't drift apart.
+            "max_name_length": MAX_NAME_LENGTH,
+            "max_location_name_length": MAX_LOCATION_NAME_LENGTH,
         },
     )
 

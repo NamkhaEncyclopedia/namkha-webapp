@@ -132,7 +132,12 @@
               </div>
               <div>
                 <label for="name" class="label-major">Name (optional):</label>
-                <input type="text" id="name" name="name" class="input-text" x-ref="name">
+                <input type="text"
+                       id="name"
+                       name="name"
+                       class="input-text"
+                       maxlength="{{ max_name_length }}"
+                       x-ref="name">
               </div>
               <div>
                 <label class="label-major">Namkha type:</label>
@@ -180,6 +185,7 @@
                          id="place"
                          class="input-text"
                          autocomplete="off"
+                         maxlength="{{ max_location_name_length }}"
                          :placeholder="manualCoords ? 'Place name (optional)' : 'Start typing a place…'"
                          :role="manualCoords ? null : 'combobox'"
                          :aria-controls="manualCoords ? null : 'place-listbox'"

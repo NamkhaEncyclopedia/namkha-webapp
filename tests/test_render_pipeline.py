@@ -12,6 +12,7 @@ layer; the compiled path is checked structurally.
 """
 
 import namkha_calculator as nc
+import pytest
 from lxml import etree
 from namkha_calculator.calculation_notes import CalculationNote, CalculationNoteType
 
@@ -265,6 +266,22 @@ def test_render_pdf_is_a_valid_pdf(fixture_form):
     pdf = render_pdf(result)
     assert pdf[:5] == b"%PDF-"
     assert len(pdf) > 1000
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Zoë Müller-Ångström Sørensen",  # 28 chars, cut lands mid-"ö"
+        "Владимир Константинопольский",
+        "ཀུན་བཟང་རྡོ་རྗེ་བཀྲ་ཤིས་དབང་ཕྱུག",
+    ],
+)
+def test_long_multibyte_name_renders(make_request, make_result, name):
+    """sheet.typ truncates the footer name past 22; str.slice() there is byte-
+    indexed, so cutting mid-character used to raise "not a character boundary"
+    and surface as a 500. Any name over the limit in a non-ASCII script hits it."""
+    pdf = render_pdf(make_result(request=make_request(name=name)))
+    assert pdf[:5] == b"%PDF-"
 
 
 def test_render_pdf_embeds_document_metadata(fixture_form):

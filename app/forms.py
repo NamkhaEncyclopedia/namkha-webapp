@@ -31,6 +31,15 @@ FIELDS = (
     "method",
 )
 
+# Caps on the two free-text fields. Both end up on the sheet, and the name also
+# becomes the PDF download filename -- an unbounded one produces a
+# Content-Disposition header past what fly-proxy and h11 accept, so the download
+# fails. Enforced here rather than only as maxlength on the inputs, which a
+# direct POST skips. Counted in characters, not bytes: the limit must mean the
+# same thing for a Tibetan name as for an ASCII one.
+MAX_NAME_LENGTH = 100
+MAX_LOCATION_NAME_LENGTH = 200
+
 
 def build_request(form) -> NamkhaRequest:
     """Parse a form mapping into a NamkhaRequest.
@@ -40,6 +49,8 @@ def build_request(form) -> NamkhaRequest:
     of nc.calculate_namkha instead and are mapped separately by the caller.
     """
     name = (form.get("name") or "").strip() or None
+    if name is not None and len(name) > MAX_NAME_LENGTH:
+        raise ValueError(f"Name must be {MAX_NAME_LENGTH} characters or fewer.")
 
     # birth_date "YYYY-MM-DD" + birth_time "HH:MM" -> naive local datetime.
     try:
@@ -96,6 +107,10 @@ def build_request(form) -> NamkhaRequest:
     # `location_name` is the place field text: the autocomplete label, or whatever
     # the user typed in manual-coordinate mode. Blank -> no name (bare coordinates).
     place_name = (form.get("location_name") or "").strip() or None
+    if place_name is not None and len(place_name) > MAX_LOCATION_NAME_LENGTH:
+        raise ValueError(
+            f"Birth place must be {MAX_LOCATION_NAME_LENGTH} characters or fewer."
+        )
     try:
         birth_location = nc.Location(
             latitude=latitude, longitude=longitude, name=place_name
