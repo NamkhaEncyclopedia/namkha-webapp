@@ -158,9 +158,7 @@
         text(size: 9pt)[#aspect.syllable_roman],
       ),
       [#aspect.center_color],
-      if aspect.label == "Life" [#aspect.sequence #text(
-          fill: rgb("#666666"),
-        )[ ⛌ 3]] else [#aspect.sequence],
+      [#aspect.sequence],
       if aspect.label == "Life" [–] else if aspect.conflicted [#text(
         size: 12pt,
         fill: rgb("#C0392B"),
