@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 
-from app import constants
+from app import constants, turnstile
 from app.calculation_render import render_pdf, render_svg
 from app.event_log import configure_logging, log_event
 from app.forms import FIELDS, NamkhaRequest, build_request
@@ -36,12 +36,20 @@ BASE = Path(__file__).parent
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
     """Start the non-blocking log listener on boot, stop it on shutdown so its
-    background thread drains and exits cleanly."""
+    background thread drains and exits cleanly. Turnstile is checked here too:
+    without a secret the app would boot and then reject every visitor, so it is
+    better to refuse to start; its siteverify client is opened here as well, so
+    every verification shares one pooled connection to Cloudflare."""
+    turnstile.check_configuration()
     listener = configure_logging()
+    turnstile.open_client()
     try:
         yield
     finally:
-        listener.stop()
+        try:
+            await turnstile.close_client()
+        finally:
+            listener.stop()  # must run even if closing the client fails
 
 
 app = FastAPI(title="Namkha Calculator Web", lifespan=_lifespan)
@@ -192,6 +200,12 @@ async def _compile_slot(route: str):
 # determined attacker (load the page once, replay the token from the same IP), it
 # blocks copy-pasted curl commands that never load the page at all, and tokens
 # leaked or copy-pasted to a different client.
+#
+# A token also carries the Turnstile verdict: a /calculate that passes the bot
+# check AND produces a sheet marks its token verified, and /download.pdf requires
+# that mark. Otherwise the bot check would only move the abuse path -- load /,
+# then POST the same compile work to /download.pdf without ever touching the
+# widget.
 SESSION_TOKEN_TTL = 1800.0  # seconds; long enough to fill the form unhurried
 # Hard cap on the store, so many distinct clients minting fresh tokens can't grow
 # it without bound -- TTL alone doesn't bound anything, since a flood of tokens is
@@ -202,10 +216,11 @@ MAX_SESSION_TOKENS = 4096
 # other visitor out. Deliberately generous: _client_ip buckets a whole office,
 # school or mobile carrier behind one NAT address, and they legitimately share it.
 MAX_TOKENS_PER_CLIENT = 32
-# token -> (client, issued_at), oldest first. Insertion order is issue order
-# (issued_at ascending) and MUST stay that way -- the sweep below reads it as
-# such; never move_to_end here (unlike _result_cache) or the sweep breaks.
-_session_tokens: OrderedDict[str, tuple[str, float]] = OrderedDict()
+# token -> (client, issued_at, turnstile_verified), oldest first. Insertion order
+# is issue order (issued_at ascending) and MUST stay that way -- the sweep below
+# reads it as such. _mark_session_verified rewrites a value in place, which does
+# not reorder; never move_to_end here (unlike _result_cache) or the sweep breaks.
+_session_tokens: OrderedDict[str, tuple[str, float, bool]] = OrderedDict()
 # client -> its own tokens, oldest first. Only an index into _session_tokens, kept
 # so both caps are enforced without scanning the whole store on every GET / --
 # that scan is the CPU churn the caps are here to prevent in the first place.
@@ -214,7 +229,7 @@ _client_tokens: dict[str, deque[str]] = {}
 
 def _drop_session_token(token: str) -> None:
     """Forget a token, keeping the per-client index in step with the store."""
-    issued_client, _issued_at = _session_tokens.pop(token)
+    issued_client, _issued_at, _verified = _session_tokens.pop(token)
     client_tokens = _client_tokens[issued_client]
     client_tokens.remove(token)  # at most MAX_TOKENS_PER_CLIENT long
     if not client_tokens:
@@ -226,13 +241,15 @@ def _issue_session_token(client: str) -> str:
     # Expired tokens are the oldest ones, so they sit at the front: drop until the
     # front is live again. Costs one step per token actually evicted, not a scan.
     while _session_tokens:
-        oldest, (_, issued_at) = next(iter(_session_tokens.items()))
+        oldest, (_, issued_at, _verified) = next(iter(_session_tokens.items()))
         if now - issued_at < SESSION_TOKEN_TTL:
             break
         _drop_session_token(oldest)
     # Trim this client to one below its cap, since a fresh token follows. Only
     # once the store is filling up: the cap is about one client crowding the
-    # others out, and with room to spare nobody is being crowded.
+    # others out, and with room to spare nobody is being crowded. Trimming
+    # unconditionally would mean a NAT'd office evicting its own verified tokens
+    # -- and a verified token is what /download.pdf needs after /calculate.
     if len(_session_tokens) >= MAX_SESSION_TOKENS // 2:
         client_tokens = _client_tokens.get(client)
         while client_tokens and len(client_tokens) >= MAX_TOKENS_PER_CLIENT:
@@ -241,18 +258,29 @@ def _issue_session_token(client: str) -> str:
     while len(_session_tokens) >= MAX_SESSION_TOKENS:
         _drop_session_token(next(iter(_session_tokens)))
     token = secrets.token_urlsafe(32)
-    _session_tokens[token] = (client, now)
+    _session_tokens[token] = (client, now, False)
     _client_tokens.setdefault(client, deque()).append(token)
     return token
 
 
-def _valid_session_token(token, client: str) -> bool:
+def _mark_session_verified(token) -> None:
+    """Record that this token's page passed Turnstile, so the download of the
+    same result doesn't need a second widget."""
+    entry = _session_tokens.get(token)
+    if entry is not None:
+        issued_client, issued_at, _verified = entry
+        _session_tokens[token] = (issued_client, issued_at, True)
+
+
+def _valid_session_token(token, client: str, *, require_verified: bool = False) -> bool:
     if not token:
         return False
     entry = _session_tokens.get(token)
     if entry is None:
         return False
-    issued_client, issued_at = entry
+    issued_client, issued_at, verified = entry
+    if require_verified and not verified:
+        return False
     return issued_client == client and time.monotonic() - issued_at < SESSION_TOKEN_TTL
 
 
@@ -353,6 +381,7 @@ async def index(request: Request):
             "current_year": datetime.now().year,
             "test_mode_enabled": TEST_MODE_ENABLED,
             "session_token": _issue_session_token(_client_ip(request)),
+            "turnstile_sitekey": constants.TURNSTILE_SITEKEY,
         },
     )
 
@@ -374,13 +403,34 @@ def _userfriendly_calculation_error(exc: ValueError) -> str:
     return "Could not calculate this Namkha; check the birth date, time, and place."
 
 
+# Same text whatever failed the Turnstile check, so a probing client learns
+# nothing; the reason goes to the log instead.
+TURNSTILE_ERROR = (
+    "Could not verify that you are human. Please try again – if it keeps "
+    "happening, reload the page."
+)
+
+# Fields echoed back into the download form by _result.html. An allowlist, so a
+# spent single-use Turnstile token is never carried into the next submission and
+# arbitrary injected keys aren't reflected either.
+_ECHOED_FIELDS = frozenset(FIELDS) | {"session_token"}
+
+
 def _result_response(
-    request: Request, form, error: str | None = None, svg: str | None = None
+    request: Request,
+    form,
+    error: str | None = None,
+    svg: str | None = None,
+    status_code: int = 200,
 ) -> HTMLResponse:
     """Single context shape for _result.html, used by both the success and
     error swaps so the template never sees a partial context."""
+    echoed = {key: value for key, value in form.items() if key in _ECHOED_FIELDS}
     return templates.TemplateResponse(
-        request, "_result.html", {"error": error, "svg": svg, "form": form}
+        request,
+        "_result.html",
+        {"error": error, "svg": svg, "form": echoed},
+        status_code=status_code,
     )
 
 
@@ -392,10 +442,39 @@ async def calculate(request: Request):
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
-    if not _valid_session_token(form.get("session_token"), client):
+    session_token = form.get("session_token")
+    if not _valid_session_token(session_token, client):
         raise HTTPException(
             status_code=403, detail="Session expired; reload the page and try again."
         )
+
+    # Bot gate, before any of the expensive work. The token is single-use and
+    # spent here even when the form itself turns out to be invalid -- the page
+    # resets the widget after every submission, so a retry gets a fresh one.
+    # form.get hands back an UploadFile when a multipart body sends the field as
+    # a file part; anything that is not a plain string is no token at all.
+    submitted_token = form.get(turnstile.TOKEN_FIELD)
+    if not isinstance(submitted_token, str):
+        submitted_token = ""
+    verification = await turnstile.verify(submitted_token, client)
+    if not verification.ok:
+        # Only the normalized bucket goes into the event log, so rejections
+        # aggregate instead of scattering over one slug per HTTP status or
+        # error-code combination. The raw specifics stay at debug level, off
+        # unless LOG_LEVEL says otherwise.
+        log_event(
+            logger,
+            "/calculate",
+            form,
+            outcome="reject",
+            error=f"turnstile: {verification.reason}",
+            level=logging.WARNING,
+        )
+        if verification.detail:
+            logger.debug(
+                "turnstile rejected (%s): %s", verification.reason, verification.detail
+            )
+        return _result_response(request, form, error=TURNSTILE_ERROR, status_code=403)
 
     try:
         namkha_request = build_request(form)
@@ -440,6 +519,9 @@ async def calculate(request: Request):
         )
         raise
 
+    # Only now, with a result in hand: the download of this very result is what
+    # the mark unlocks, so a submission that never produced one doesn't earn it.
+    _mark_session_verified(session_token)
     log_event(logger, "/calculate", form, outcome="ok", result=result)
     return _result_response(request, form, svg=svg)
 
@@ -486,9 +568,14 @@ async def download_pdf(request: Request):
         raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
-    if not _valid_session_token(form.get("session_token"), client):
+    # The result being downloaded came from a /calculate that passed Turnstile;
+    # requiring the mark keeps this route from being a way around the widget.
+    if not _valid_session_token(
+        form.get("session_token"), client, require_verified=True
+    ):
         raise HTTPException(
-            status_code=403, detail="Session expired; reload the page and try again."
+            status_code=403,
+            detail="Session expired; reload the page and calculate again.",
         )
 
     try:

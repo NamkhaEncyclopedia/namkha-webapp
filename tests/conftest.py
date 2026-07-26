@@ -14,7 +14,7 @@ import namkha_calculator as nc
 import pytest
 from starlette.testclient import TestClient
 
-from app import main
+from app import main, turnstile
 from app.forms import NamkhaRequest
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -25,6 +25,19 @@ def _log_salt(monkeypatch):
     """configure_logging() refuses to boot without NAMKHA_LOG_SALT; set one for
     every test so the app lifespan (TestClient) and direct calls both pass."""
     monkeypatch.setenv("NAMKHA_LOG_SALT", "test-salt")
+
+
+@pytest.fixture(autouse=True)
+def _turnstile_passes(monkeypatch):
+    """/calculate verifies a Turnstile token with Cloudflare. Stub the verifier
+    for every test so the suite neither needs the network nor a real widget --
+    tests about the gate itself (tests/test_turnstile.py, the route tests) patch
+    it again with what they need."""
+
+    async def _verify(token, client_ip):
+        return turnstile.Verification(True)
+
+    monkeypatch.setattr(turnstile, "verify", _verify)
 
 
 @pytest.fixture
@@ -40,11 +53,17 @@ def fixture_form():
     main._issue_session_token), since /calculate and /download.pdf now require one
     -- routes calling this fixture are testing calculation behavior, not the gate
     itself, so a real token keeps that gate out of their way. Tokens are bound to
-    the issuing client's IP; TestClient's direct peer is always "testclient"."""
+    the issuing client's IP; TestClient's direct peer is always "testclient".
+
+    The token is pre-marked Turnstile-verified for the same reason: /download.pdf
+    only accepts a session that already passed the widget on /calculate."""
 
     def load(name):
         data = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
-        data["session_token"] = main._issue_session_token("testclient")
+        session_token = main._issue_session_token("testclient")
+        main._mark_session_verified(session_token)
+        data["session_token"] = session_token
+        data[turnstile.TOKEN_FIELD] = "test-token"
         return data
 
     return load

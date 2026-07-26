@@ -1,6 +1,7 @@
 """Static option lists and color map."""
 
 import importlib.metadata
+import os
 import re
 import tomllib
 from datetime import datetime
@@ -41,6 +42,13 @@ def _prerelease_label(version: str) -> str | None:
 # Project-wide pre-release marker (the calculation engine governs result validity);
 # shown on both badges. Self-clears once the library ships a stable release.
 PRERELEASE_LABEL = _prerelease_label(LIBRARY_VERSION)  # "alpha" for 0.1.0a4
+
+# Cloudflare Turnstile widget for the calculator form. A sitekey is public by
+# design -- it ships in the page HTML -- so the production one lives here in
+# plain sight; only TURNSTILE_SECRET is confidential (see app/turnstile.py).
+# Override for local development with Cloudflare's always-passes test sitekey,
+# which works on any hostname: TURNSTILE_SITEKEY=1x00000000000000000000AA.
+TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "0x4AAAAAAD9sLh4BbknGiGZq")
 
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {

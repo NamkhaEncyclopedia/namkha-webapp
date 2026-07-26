@@ -31,6 +31,11 @@
     <link rel="stylesheet" href="/static/lightbox.css">
     <script src="/static/htmx.min.js"></script>
     <script defer src="/static/alpine.min.js"></script>
+    <!-- Cloudflare Turnstile bot check on the calculator form. The only script
+       not vendored: it must be loaded from Cloudflare, never proxied or cached. -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+            async
+            defer></script>
   </head>
   <body>
     <a class="skip-link" href="#calculator">Skip to content</a>
@@ -405,6 +410,15 @@
               </div>
             </div>
             <div class="form-mains">
+              <!-- Turnstile adds its own hidden cf-turnstile-response input to this
+                 form, which htmx serializes with the rest. interaction-only: shown
+                 only when Cloudflare actually challenges the visitor. -->
+              <div class="cf-turnstile"
+                   data-sitekey="{{ turnstile_sitekey }}"
+                   data-action="calculate"
+                   data-appearance="interaction-only"
+                   data-theme="light"
+                   data-refresh-expired="auto"></div>
               <div class="input-columns">
                 <button type="button" class="button-reset" @click="resetForm()">Reset</button>
                 <button type="submit">
@@ -458,6 +472,27 @@
     }
 
     document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
+
+    // A rejected Turnstile check answers with the error partial and a 403; htmx
+    // drops non-2xx bodies unless we opt in. Content type keeps this to our own
+    // HTML partials -- the JSON 403/429 from the other gates stay as they were.
+    document.body.addEventListener('htmx:beforeSwap', (event) => {
+      const xhr = event.detail.xhr;
+      if (event.detail.target.id !== 'result' || xhr.status < 400) return;
+      const contentType = (xhr.getResponseHeader('content-type') || '').trim().toLowerCase();
+      if (contentType.startsWith('text/html')) {
+        event.detail.shouldSwap = true;
+        event.detail.isError = false;
+      }
+    });
+
+    // Turnstile tokens are single-use, and the page stays put after a submission,
+    // so the widget has to be reset before a retry. afterRequest, not afterSwap:
+    // the token is spent on rejected and invalid submissions too, which don't swap.
+    document.body.addEventListener('htmx:afterRequest', (event) => {
+      if (!event.detail.elt.classList.contains('calculator-form')) return;
+      if (window.turnstile) window.turnstile.reset('.cf-turnstile');
+    });
 
     document.body.addEventListener('htmx:afterSwap', (event) => {
       if (event.detail.target.id !== 'result') return;

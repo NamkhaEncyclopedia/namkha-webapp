@@ -1,9 +1,11 @@
 """HTTP routes via Starlette's TestClient, plus the error-mapping and rate-limit
 helpers they depend on."""
 
+import logging
+
 import pytest
 
-from app import main
+from app import main, turnstile
 
 
 def test_index_ok(client):
@@ -146,10 +148,11 @@ def test_session_token_store_is_hard_capped(monkeypatch):
 
 def test_session_token_sweep_drops_expired():
     stale = main._issue_session_token("stale-client")
-    issued_client, issued_at = main._session_tokens[stale]
+    issued_client, issued_at, verified = main._session_tokens[stale]
     main._session_tokens[stale] = (
         issued_client,
         issued_at - main.SESSION_TOKEN_TTL - 1,
+        verified,
     )
     fresh = main._issue_session_token("fresh-client")
     assert stale not in main._session_tokens
@@ -168,7 +171,7 @@ def test_session_token_per_client_cap_protects_other_clients(monkeypatch):
         main._issue_session_token("flooder")
     flooder_tokens = [
         token
-        for token, (issued_client, _) in main._session_tokens.items()
+        for token, (issued_client, _, _verified) in main._session_tokens.items()
         if issued_client == "flooder"
     ]
     assert len(flooder_tokens) == main.MAX_TOKENS_PER_CLIENT
@@ -178,7 +181,7 @@ def test_session_token_per_client_cap_protects_other_clients(monkeypatch):
 
 def test_session_tokens_untrimmed_while_the_store_has_room(monkeypatch):
     """The per-client cap only engages under pressure, so a shared NAT address
-    doesn't evict its own tokens for nothing."""
+    doesn't evict its own (possibly Turnstile-verified) tokens for nothing."""
     monkeypatch.setattr(main, "MAX_SESSION_TOKENS", 64)
     monkeypatch.setattr(main, "MAX_TOKENS_PER_CLIENT", 4)
     tokens = [
@@ -195,6 +198,157 @@ def test_session_token_client_index_stays_in_step():
         main._issue_session_token(f"client-{i % 2}")
     indexed = [token for tokens in main._client_tokens.values() for token in tokens]
     assert sorted(indexed) == sorted(main._session_tokens)
+
+
+def test_marking_verified_keeps_issue_order(monkeypatch):
+    """_issue_session_token sweeps and evicts from the front, which only works
+    while insertion order stays issue order -- guard that marking an old token
+    verified doesn't move it to the back."""
+    monkeypatch.setattr(main, "MAX_SESSION_TOKENS", 4)
+    oldest = main._issue_session_token("client-a")
+    main._mark_session_verified(oldest)
+    newer = [main._issue_session_token(f"client-{i}") for i in range(3)]
+    assert oldest in main._session_tokens
+    main._issue_session_token("client-z")
+    assert oldest not in main._session_tokens
+    assert all(token in main._session_tokens for token in newer)
+
+
+# --- Turnstile gate ------------------------------------------------------------------
+
+
+@pytest.fixture
+def turnstile_rejects(monkeypatch):
+    """Undo the suite-wide pass (tests/conftest.py) for one test."""
+
+    async def _verify(token, client_ip):
+        return turnstile.Verification(
+            False, turnstile.RejectionReason.EXPIRED_TOKEN, "timeout-or-duplicate"
+        )
+
+    monkeypatch.setattr(turnstile, "verify", _verify)
+
+
+@pytest.fixture
+def app_log(caplog):
+    """Records from the "app" logger. caplog alone is not enough: the app
+    logger stops propagating once configure_logging has run in this process
+    (any test that enters the lifespan), so hang caplog's handler on it
+    directly and restore the level after."""
+    app_logger = logging.getLogger("app")
+    saved_level = app_logger.level
+    app_logger.addHandler(caplog.handler)
+    app_logger.setLevel(logging.DEBUG)
+    caplog.set_level(logging.DEBUG)
+    yield caplog
+    app_logger.removeHandler(caplog.handler)
+    app_logger.setLevel(saved_level)
+
+
+def test_calculate_rejects_a_failed_turnstile_check(
+    client, fixture_form, turnstile_rejects
+):
+    """403, but with the HTML error partial: index.html opts htmx into swapping
+    4xx HTML, so the visitor sees the banner instead of nothing."""
+    response = client.post("/calculate", data=fixture_form("year_classic_berlin"))
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'class="error"' in response.text
+    assert "Could not verify that you are human" in response.text
+    assert '<div class="page"' not in response.text  # nothing was calculated
+
+
+def test_calculate_reveals_nothing_about_why_it_failed(
+    client, fixture_form, turnstile_rejects
+):
+    response = client.post("/calculate", data=fixture_form("year_classic_berlin"))
+    assert "timeout-or-duplicate" not in response.text
+
+
+def test_a_rejection_logs_the_normalized_reason_not_the_raw_code(
+    client, fixture_form, turnstile_rejects, app_log
+):
+    """The event log gets the bucket only, so rejections aggregate instead of
+    splitting over one slug per error-code combination; the raw code is debug."""
+    client.post("/calculate", data=fixture_form("year_classic_berlin"))
+    records = app_log.records
+    warnings = [r.getMessage() for r in records if r.levelno >= logging.WARNING]
+    debug = [r.getMessage() for r in records if r.levelno == logging.DEBUG]
+    assert any("turnstile: expired-token" in message for message in warnings)
+    assert not any("timeout-or-duplicate" in message for message in warnings)
+    assert any("timeout-or-duplicate" in message for message in debug)
+
+
+def test_calculate_passes_the_submitted_token_and_client_ip(
+    client, fixture_form, monkeypatch
+):
+    seen = {}
+
+    async def _verify(token, client_ip):
+        seen["token"] = token
+        seen["client_ip"] = client_ip
+        return turnstile.Verification(True)
+
+    monkeypatch.setattr(turnstile, "verify", _verify)
+    form = fixture_form("year_classic_berlin")
+    form[turnstile.TOKEN_FIELD] = "submitted-token"
+    client.post("/calculate", data=form)
+    assert seen == {"token": "submitted-token", "client_ip": "testclient"}
+
+
+def test_calculate_normalizes_a_token_sent_as_a_file_part(
+    client, fixture_form, monkeypatch
+):
+    """A multipart body may carry the field as a file, so form.get answers with
+    an UploadFile. verify() must still be handed a plain string."""
+    seen = {}
+
+    async def _verify(token, client_ip):
+        seen["token"] = token
+        return turnstile.Verification(False, turnstile.RejectionReason.MISSING_TOKEN)
+
+    monkeypatch.setattr(turnstile, "verify", _verify)
+    response = client.post(
+        "/calculate",
+        data=fixture_form("year_classic_berlin"),
+        files={turnstile.TOKEN_FIELD: ("token.txt", b"not-a-form-field")},
+    )
+    assert seen["token"] == ""
+    assert response.status_code == 403
+
+
+def test_spent_token_is_not_echoed_into_the_download_form(client, fixture_form):
+    """The token is single-use; carrying it into the download form would replay
+    an already spent one."""
+    response = client.post("/calculate", data=fixture_form("year_classic_berlin"))
+    assert response.status_code == 200
+    assert turnstile.TOKEN_FIELD not in response.text
+
+
+def test_download_pdf_rejects_an_unverified_session(client, fixture_form):
+    """A session token alone is not enough: without a /calculate that passed
+    Turnstile, the compile is out of reach."""
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = main._issue_session_token("testclient")  # not verified
+    response = client.post("/download.pdf", data=form)
+    assert response.status_code == 403
+
+
+def test_calculate_verifies_the_session_for_download(client, fixture_form):
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = main._issue_session_token("testclient")
+    assert client.post("/download.pdf", data=form).status_code == 403
+    assert client.post("/calculate", data=form).status_code == 200
+    assert client.post("/download.pdf", data=form).status_code == 200
+
+
+def test_a_rejected_form_does_not_verify_the_session(client, fixture_form):
+    """Passing Turnstile is not enough on its own: the session is only marked
+    once a sheet was actually produced."""
+    form = fixture_form("error_month_cnnr")  # method/type mismatch, no result
+    form["session_token"] = main._issue_session_token("testclient")
+    assert client.post("/calculate", data=form).status_code == 200
+    assert client.post("/download.pdf", data=form).status_code == 403
 
 
 # --- calculate_namkha result cache --------------------------------------------------

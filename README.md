@@ -57,23 +57,35 @@ Server-side Python, server-rendered HTML.
 - **Frontend** – [HTMX](https://htmx.org/) swaps the calculation result into the
   page; [Alpine.js](https://alpinejs.dev/) drives the form behavior (field gating,
   autocomplete, time zone modes); plain CSS. Place autocomplete is powered by
-  [Komoot Photon](https://photon.komoot.io/). All scripts are vendored –
+  [Komoot Photon](https://photon.komoot.io/), and the form is gated by
+  [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/). All
+  scripts are vendored except Turnstile's, which must come from Cloudflare –
   no Node, no bundler.
 
 ## Running the app
 
 Requires Python 3.13+ and [Poetry](https://python-poetry.org/).
 
-The app hashes the birth name for logging, so a salt is required – it will refuse
-to start without one:
+Two things are required and the app refuses to start without them: a salt for the
+birth-name hash in the log, and a [Cloudflare Turnstile](https://developers.cloudflare.com/turnstile/)
+secret for the bot check on the form. For local development, use Cloudflare's
+[test keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/) –
+they always pass and work on any host name:
 
 ```sh
 export NAMKHA_LOG_SALT=some-random-string
+export TURNSTILE_SITEKEY=1x00000000000000000000AA
+export TURNSTILE_SECRET=1x0000000000000000000000000000000AA
 poetry install
 poetry run uvicorn app.main:app --reload
 ```
 
 Then open <http://127.0.0.1:8000/>.
+
+In production only `TURNSTILE_SECRET` has to be set – it is the one confidential
+value and never belongs in the repository. The site key and the accepted host
+names are public and default to the deployed ones (`app/constants.py`,
+`app/turnstile.py`).
 
 
 ## Testing
