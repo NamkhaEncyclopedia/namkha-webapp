@@ -18,8 +18,9 @@ library.
 
 - [Development status](#development-status)
 - [Features](#features)
-- [Stack](#how-it-is-built)
+- [Stack](#stack)
 - [Running the app](#running-the-app)
+- [Deployment](#deployment)
 - [Testing](#testing)
 - [Development](#development)
 - [License](#license)
@@ -42,6 +43,7 @@ library.
   all eight aspects (with the full harmonization sequence for each), any calculation
   notes in plain language, and the illustration – a flat, colored
   depiction of the made Namkha.
+- **Mobile friendly** – the form and the sheet adapt to small screens.
 
 ## Stack
 
@@ -82,11 +84,48 @@ poetry run uvicorn app.main:app --reload
 
 Then open <http://127.0.0.1:8000/>.
 
-In production only `TURNSTILE_SECRET` has to be set – it is the one confidential
-value and never belongs in the repository. The site key and the accepted host
-names are public and default to the deployed ones (`app/constants.py`,
-`app/turnstile.py`).
+## Deployment
 
+The app ships as a Docker container. The image installs only the main dependency group
+into a virtualenv in a builder stage, copies that venv into a slim runtime image,
+and runs as a non-root user on port 8080:
+
+```sh
+docker build -t namkha-webapp .
+docker run --rm -p 8080:8080 \
+  -e NAMKHA_LOG_SALT=some-random-string \
+  -e TURNSTILE_SECRET=your-cloudflare-secret \
+  namkha-webapp
+```
+
+`TURNSTILE_SECRET` is the only confidential value and never belongs in the
+repository; the site key and the accepted host names are public.
+
+Required, the app refuses to start without them:
+
+- `NAMKHA_LOG_SALT` – salt for the birth-name hash in the log.
+- `TURNSTILE_SECRET` – secret used to verify the widget token server-side.
+
+Optional:
+
+- `TURNSTILE_SITEKEY` – public widget key rendered into the form. Defaults to the
+  deployed one (`app/constants.py`).
+- `TURNSTILE_HOSTNAMES` – comma-separated host names a token may be issued for.
+  Defaults to the deployed ones (`app/turnstile.py`).
+- `NAMKHA_TRUSTED_PROXIES` – comma-separated IPs or CIDRs of reverse proxies
+  allowed to set `X-Forwarded-For`. Empty by default, meaning no proxy is trusted
+  and the header is ignored.
+- `LOG_LEVEL` – level for the application logger, `INFO` by default.
+- `NAMKHA_TEST_MODE` – `1` adds the sample-data picker to the form. Leave it unset
+  in production; the routes are not registered at all without it.
+
+The calculation and time zone endpoints are rate limited per client, and Typst
+compiles run behind a concurrency cap. The container already starts uvicorn with
+`--proxy-headers`, but the limiter only trusts `X-Forwarded-For` from proxies
+named in `NAMKHA_TRUSTED_PROXIES` – set it when running behind one, otherwise
+every request looks like it comes from the proxy and all visitors share a single
+bucket. The limiter state lives in the process, so running several workers
+multiplies the effective limit.
 
 ## Testing
 
@@ -103,8 +142,9 @@ Setting the `NAMKHA_TEST_MODE=1` environment variable adds a sample-data picker 
 
 ## Development
 
-Pre-commit hooks cover linting and formatting (ruff), type checking (mypy), Typst
-formatting (typstyle), file hygiene, and conventional commit messages:
+Pre-commit hooks cover Python linting and formatting (ruff), type checking (mypy),
+templates (djlint, Jinja-aware), CSS and JS (prettier), the Dockerfile (hadolint),
+Typst formatting (typstyle), file hygiene, and conventional commit messages:
 
 ```sh
 poetry run pre-commit install
