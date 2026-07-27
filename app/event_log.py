@@ -20,7 +20,6 @@ import queue
 import sys
 from logging.handlers import QueueHandler, QueueListener
 
-from app.calculation_render import ASPECTS
 from app.forms import FIELDS
 
 # The one sensitive form field; hashed everywhere, never logged in clear text.
@@ -52,16 +51,16 @@ def summarize_result(result) -> dict:
     so keeping it out of here makes leaking the name through the result summary
     impossible rather than a rule to remember."""
     aspects = []
-    for aspect, _ in ASPECTS:
-        harmonized_aspect = next(
-            h for h in result.harmonized_aspects if h.name == aspect
-        )
+    for harmonized_aspect in result.harmonized_aspects:
+        aspect = harmonized_aspect.name
         aspects.append(
             {
                 "aspect": aspect.name,
                 "center": harmonized_aspect.center.value,
                 "mewa": result.mewa_numbers.get(aspect),
-                "sequence": [e.value for e in harmonized_aspect.harmonization_seq],
+                "sequence": [
+                    element.value for element in harmonized_aspect.harmonization_seq
+                ],
                 "conflicted": harmonized_aspect.is_conflicted,
             }
         )
