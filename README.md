@@ -82,6 +82,14 @@ poetry install
 poetry run uvicorn app.main:app --reload
 ```
 
+Or use `scripts/run-dev.sh`, which sets the same dummy salt and Turnstile test
+keys, enables `NAMKHA_TEST_MODE`, and starts uvicorn:
+
+```sh
+poetry install
+./scripts/run-dev.sh
+```
+
 Then open <http://127.0.0.1:8000/>.
 
 ## Deployment
@@ -109,7 +117,9 @@ Required, the app refuses to start without them:
 Optional:
 
 - `TURNSTILE_SITEKEY` – public widget key rendered into the form. Defaults to the
-  deployed one (`app/constants.py`).
+  deployed one (`app/constants.py`), which only works on the deployed host names:
+  override it locally, or the widget issues no token and every calculation is
+  rejected with "Could not verify that you are human".
 - `TURNSTILE_HOSTNAMES` – comma-separated host names a token may be issued for.
   Defaults to the deployed ones (`app/turnstile.py`).
 - `NAMKHA_TRUSTED_PROXIES` – comma-separated IPs or CIDRs of reverse proxies
