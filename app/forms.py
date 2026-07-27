@@ -8,8 +8,11 @@ from zoneinfo import ZoneInfoNotFoundError
 import namkha_calculator as nc
 
 
-@dataclass
+@dataclass(frozen=True)
 class NamkhaRequest:
+    """Frozen so it is hashable: the result cache keys on the request itself
+    rather than restating its fields, and a new field joins the key for free."""
+
     subject: nc.Subject
     namkha_type: nc.NamkhaType
     method: nc.CalculationMethod

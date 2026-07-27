@@ -179,6 +179,14 @@ def _compile_rate_limited(client: str) -> bool:
     return _rate_limited(_compile_hits, client, COMPILE_RATE_LIMIT, COMPILE_RATE_WINDOW)
 
 
+def _reject_if_compile_rate_limited(client: str, route: str) -> None:
+    """Shared opening guard for the two compile-bearing routes, so a third one
+    can't pick up the limiter without also picking up the log line."""
+    if _compile_rate_limited(client):
+        logger.warning("compile rate limit exceeded for %s on %s", client, route)
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+
 @asynccontextmanager
 async def _compile_slot(route: str):
     """Acquire the shared compile semaphore, logging how long the request waited.
@@ -297,24 +305,17 @@ def _valid_session_token(token, client: str, *, require_verified: bool = False) 
 # share there); this only saves the calculation in between.
 # `nc.Subject` is a frozen dataclass (hashable) carrying every input that shapes
 # the result and its notes -- birth_timezone (None = derived) and on_summer_time
-# included -- so the subject itself keys the cache.
+# included -- and NamkhaRequest is frozen too, so the request itself keys the
+# cache and a field added to it joins the key automatically.
 RESULT_CACHE_MAXSIZE = 256
-_result_cache: OrderedDict[tuple, nc.NamkhaCalculationResult] = OrderedDict()
+_result_cache: OrderedDict[NamkhaRequest, nc.NamkhaCalculationResult] = OrderedDict()
 _result_cache_lock = threading.Lock()
-
-
-def _result_cache_key(namkha_request: NamkhaRequest) -> tuple:
-    return (
-        namkha_request.subject,
-        namkha_request.namkha_type,
-        namkha_request.method,
-    )
 
 
 def _cached_calculate_namkha(
     namkha_request: NamkhaRequest,
 ) -> nc.NamkhaCalculationResult:
-    key = _result_cache_key(namkha_request)
+    key = namkha_request
     with _result_cache_lock:
         cached = _result_cache.get(key)
         if cached is not None:
@@ -425,6 +426,14 @@ TURNSTILE_ERROR = (
 _ECHOED_FIELDS = frozenset(FIELDS) | {"session_token"}
 
 
+def _log_unexpected(route: str, form, exc: Exception) -> None:
+    """Unexpected failure (e.g. a Typst compile error): log with form context.
+    The caller re-raises unchanged, so the 500 response is exactly as before."""
+    log_event(
+        logger, route, form, outcome="error", error=repr(exc), level=logging.ERROR
+    )
+
+
 def _result_response(
     request: Request,
     form,
@@ -446,9 +455,7 @@ def _result_response(
 @app.post("/calculate", response_class=HTMLResponse)
 async def calculate(request: Request):
     client = _client_ip(request)
-    if _compile_rate_limited(client):
-        logger.warning("compile rate limit exceeded for %s on /calculate", client)
-        raise HTTPException(status_code=429, detail="Too many requests")
+    _reject_if_compile_rate_limited(client, "/calculate")
 
     form = await request.form()
     session_token = form.get("session_token")
@@ -516,16 +523,7 @@ async def calculate(request: Request):
             request, form, error=_userfriendly_calculation_error(exc)
         )
     except Exception as exc:
-        # Unexpected failure (e.g. a Typst compile error): log with form context,
-        # then re-raise unchanged so the 500 response is exactly as before.
-        log_event(
-            logger,
-            "/calculate",
-            form,
-            outcome="error",
-            error=repr(exc),
-            level=logging.ERROR,
-        )
+        _log_unexpected("/calculate", form, exc)
         raise
 
     # Only now, with a result in hand: the download of this very result is what
@@ -572,9 +570,7 @@ def _content_disposition(filename: str) -> str:
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
     client = _client_ip(request)
-    if _compile_rate_limited(client):
-        logger.warning("compile rate limit exceeded for %s on /download.pdf", client)
-        raise HTTPException(status_code=429, detail="Too many requests")
+    _reject_if_compile_rate_limited(client, "/download.pdf")
 
     form = await request.form()
     # The result being downloaded came from a /calculate that passed Turnstile;
@@ -618,16 +614,7 @@ async def download_pdf(request: Request):
             status_code=400, detail=_userfriendly_calculation_error(exc)
         ) from exc
     except Exception as exc:
-        # Unexpected failure (e.g. a Typst compile error): log with form context,
-        # then re-raise unchanged so the 500 response is exactly as before.
-        log_event(
-            logger,
-            "/download.pdf",
-            form,
-            outcome="error",
-            error=repr(exc),
-            level=logging.ERROR,
-        )
+        _log_unexpected("/download.pdf", form, exc)
         raise
 
     log_event(logger, "/download.pdf", form, outcome="ok", result=result)
