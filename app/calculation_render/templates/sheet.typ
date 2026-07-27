@@ -159,7 +159,7 @@
       ),
       [#aspect.center_color],
       [#aspect.sequence],
-      if aspect.label == "Life" [–] else if aspect.conflicted [#text(
+      if aspect.conflicted == none [–] else if aspect.conflicted [#text(
         size: 12pt,
         fill: rgb("#C0392B"),
       )[●]] else [],

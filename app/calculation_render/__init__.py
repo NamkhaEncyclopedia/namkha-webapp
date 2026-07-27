@@ -303,7 +303,7 @@ def _build_data(result) -> dict:
                     constants.ELEMENT_SEQ_ABBREV[element]
                     for element in harmonized_aspect.harmonization_seq
                 ),
-                "conflicted": bool(harmonized_aspect.is_conflicted),
+                "conflicted": harmonized_aspect.is_conflicted,
             }
         )
     zone_text = str(subject.effective_timezone)

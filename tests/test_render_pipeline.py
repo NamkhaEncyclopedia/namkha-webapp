@@ -119,10 +119,10 @@ def test_mewa_only_on_the_four_mewa_rows(make_result):
     assert all(row["mewa"] is not None for row in mewa_rows)
 
 
-def test_conflicted_none_collapses_to_false(make_result):
+def test_conflicted_passes_none_through(make_result):
     life = _build_data(make_result())["aspects"][0]
     assert life["label"] == "Life"
-    assert life["conflicted"] is False
+    assert life["conflicted"] is None
 
 
 def test_notes_use_friendly_overrides(make_result):
