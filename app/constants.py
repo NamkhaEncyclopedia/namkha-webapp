@@ -155,15 +155,20 @@ METHODS = [
 ]
 
 
+def format_utc_offset(aware_datetime: datetime) -> str:
+    """An aware datetime's UTC offset as 'UTC+5:45'. Bare, so each caller adds
+    its own punctuation; used for both the picker labels and the sheet."""
+    total = int(aware_datetime.utcoffset().total_seconds())  # type: ignore[union-attr]
+    sign = "+" if total >= 0 else "-"
+    hours, seconds = divmod(abs(total), 3600)
+    return f"UTC{sign}{hours}:{seconds // 60:02d}"
+
+
 def _tz_label(zone_name: str) -> str:
     """e.g. 'Asia/Kathmandu (UTC+5:45)'. Offset is the CURRENT one (DST included
     if in effect now) -- a display hint in the picker, not the offset used for
     the actual birth date, which the render computes separately."""
-    aware_now = datetime.now(nc.zone(zone_name))
-    total = int(aware_now.utcoffset().total_seconds())  # type: ignore[union-attr]
-    sign = "+" if total >= 0 else "-"
-    hours, seconds = divmod(abs(total), 3600)
-    return f"{zone_name} (UTC{sign}{hours}:{seconds // 60:02d})"
+    return f"{zone_name} ({format_utc_offset(datetime.now(nc.zone(zone_name)))})"
 
 
 # Geographic zones from the library's bundled zone.tab: the canonical picker

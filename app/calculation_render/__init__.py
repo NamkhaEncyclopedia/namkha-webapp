@@ -55,11 +55,25 @@ ASPECTS = (
 )
 
 
+def _is_deep_water(element: nc.Element, mewa: int | None) -> bool:
+    """The deep-water rule: a Water center whose mewa number is 2. Applies to an
+    aspect's own center only, never to water threads in the harmonization
+    sequence -- both color lookups below go through here so the rule has one home."""
+    return element == nc.Element.WATER and mewa == 2
+
+
 def _element_color(element: nc.Element, mewa: int | None = None) -> str:
     """Element hex color, with the deep-water (mewa=2) override."""
-    if element == nc.Element.WATER and mewa == 2:
+    if _is_deep_water(element, mewa):
         return constants.MEWA_TWO_COLOR
     return constants.ELEMENT_COLORS[element]
+
+
+def _element_color_name(element: nc.Element, mewa: int | None = None) -> str:
+    """Reader-facing color name, mirroring _element_color's deep-water override."""
+    if _is_deep_water(element, mewa):
+        return constants.MEWA_TWO_COLOR_NAME
+    return constants.ELEMENT_COLOR_NAMES[element]
 
 
 def _by_id(root, node_id: str):
@@ -231,7 +245,9 @@ def fill_illustration(result) -> str:
     tree = etree.parse(str(SVG_TEMPLATE))
     root = tree.getroot()
     positions, labels = _layout(result.subject.gender)
-    by_aspect = {h.name: h for h in result.harmonized_aspects}
+    by_aspect = {
+        harmonized.name: harmonized for harmonized in result.harmonized_aspects
+    }
     for pos, aspect in positions.items():
         harmonized_aspect = by_aspect[aspect]
         mewa = result.mewa_numbers.get(aspect)
@@ -254,10 +270,8 @@ def fill_illustration(result) -> str:
 
 
 def _utc_offset(subject) -> str:
-    total = int(subject.local_birth_datetime.utcoffset().total_seconds())
-    sign = "+" if total >= 0 else "-"
-    h, m = divmod(abs(total), 3600)
-    return f"(UTC{sign}{h}:{m // 60:02d})"
+    """Bare offset, e.g. 'UTC+5:45'. Callers add their own punctuation."""
+    return constants.format_utc_offset(subject.local_birth_datetime)
 
 
 def _build_data(result) -> dict:
@@ -267,17 +281,13 @@ def _build_data(result) -> dict:
     coords = f"{location.latitude:.4f}, {location.longitude:.4f}"
     location_text = f"{location.name} ({coords})" if location.name else coords
     aspects = []
-    for aspect, label in ASPECTS:
-        harmonized_aspect = next(
-            h for h in result.harmonized_aspects if h.name == aspect
-        )
+    aspect_labels = dict(ASPECTS)
+    for harmonized_aspect in result.harmonized_aspects:
+        aspect = harmonized_aspect.name
+        label = aspect_labels[aspect]
         mewa = result.mewa_numbers.get(aspect)
         tibetan, transcription = constants.ELEMENT_SYLLABLES[harmonized_aspect.center]
-        center_color = (
-            constants.MEWA_TWO_COLOR_NAME
-            if harmonized_aspect.center == nc.Element.WATER and mewa == 2
-            else constants.ELEMENT_COLOR_NAMES[harmonized_aspect.center]
-        )
+        center_color = _element_color_name(harmonized_aspect.center, mewa)
         aspects.append(
             {
                 "label": label,
@@ -290,8 +300,8 @@ def _build_data(result) -> dict:
                 "center_color": center_color,
                 "mewa": mewa,
                 "sequence": " - ".join(
-                    constants.ELEMENT_SEQ_ABBREV[e]
-                    for e in harmonized_aspect.harmonization_seq
+                    constants.ELEMENT_SEQ_ABBREV[element]
+                    for element in harmonized_aspect.harmonization_seq
                 ),
                 "conflicted": bool(harmonized_aspect.is_conflicted),
             }
@@ -302,9 +312,9 @@ def _build_data(result) -> dict:
         # separate zone name to pair it with.
         birth_text = f"{subject.birth_datetime:%Y-%m-%d %H:%M} ({zone_text})"
     else:
-        utc_offset_plain = _utc_offset(subject)[1:-1]
         birth_text = (
-            f"{subject.birth_datetime:%Y-%m-%d %H:%M} {utc_offset_plain} ({zone_text})"
+            f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
+            f"{_utc_offset(subject)} ({zone_text})"
         )
     return {
         "subject": {
@@ -315,7 +325,7 @@ def _build_data(result) -> dict:
         },
         "meta": {
             "type": result.namkha_type.name.title(),
-            "method": {"CLASSIC": "Classic", "CNNR": "C. N. Norbu"}.get(
+            "method": constants.METHOD_LABELS.get(
                 result.calculation_method.name, result.calculation_method.name
             ),
             "birth_element": result.birth_element.value,
@@ -416,6 +426,6 @@ def render_svg(result) -> str:
     return "\n".join(
         f'<div class="page" role="button" tabindex="0" '
         f'aria-label="Enlarge page {index} of {len(pages)}">'
-        f"{_sanitize_svg(p).decode('utf-8')}</div>"
-        for index, p in enumerate(pages, start=1)
+        f"{_sanitize_svg(page).decode('utf-8')}</div>"
+        for index, page in enumerate(pages, start=1)
     )

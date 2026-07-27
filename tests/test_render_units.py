@@ -227,13 +227,13 @@ def test_utc_offset_sub_hour(make_request):
     subject = make_request(
         timezone="Asia/Kathmandu", latitude=27.70, longitude=85.32
     ).subject
-    assert _utc_offset(subject) == "(UTC+5:30)"
+    assert _utc_offset(subject) == "UTC+5:30"
 
 
 def test_utc_offset_whole_hour(make_request):
     # 1985-03-15 is before European DST began that year -> CET (+1).
     subject = make_request(timezone="Europe/Berlin").subject
-    assert _utc_offset(subject) == "(UTC+1:00)"
+    assert _utc_offset(subject) == "UTC+1:00"
 
 
 def test_utc_offset_negative(make_request):
@@ -242,7 +242,7 @@ def test_utc_offset_negative(make_request):
     subject = make_request(
         timezone="America/New_York", latitude=40.71, longitude=-74.01
     ).subject
-    assert _utc_offset(subject) == "(UTC-5:00)"
+    assert _utc_offset(subject) == "UTC-5:00"
 
 
 # --- _sanitize_svg: defense-in-depth before embedding as raw HTML -----------------
