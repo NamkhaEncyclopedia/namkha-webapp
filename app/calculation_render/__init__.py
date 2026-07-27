@@ -27,6 +27,13 @@ FONTS = Path(__file__).parent / "fonts"
 SVG_TEMPLATE = TEMPLATES / "illustration.svg"  # blank source; filled -> namkha.svg
 TYP_TEMPLATE = TEMPLATES / "sheet.typ"
 
+# Font database built once at import and shared by every compile. Rebuilding it
+# per compile means rediscovering and re-parsing every font on the host, which
+# dominates the compile time. Excluding system fonts also makes the render
+# host-independent: the sheet always uses the bundled faces in fonts/, never a
+# same-named face that happens to be installed on the machine.
+FONT_DATABASE = typst.Fonts(include_system_fonts=False, font_paths=[str(FONTS)])
+
 SVG_NS = "http://www.w3.org/2000/svg"
 
 _SVG_PATH_NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?")
@@ -361,7 +368,7 @@ def render_pdf(result) -> bytes:
         return typst.compile(
             str(tmpdir / "sheet.typ"),
             root=str(tmpdir),
-            font_paths=[str(FONTS)],
+            font_paths=FONT_DATABASE,
             format="pdf",
         )
 
@@ -402,7 +409,7 @@ def render_svg(result) -> str:
         out = typst.compile(
             str(tmpdir / "sheet.typ"),
             root=str(tmpdir),
-            font_paths=[str(FONTS)],
+            font_paths=FONT_DATABASE,
             format="svg",
         )
     pages = out if isinstance(out, list) else [out]
