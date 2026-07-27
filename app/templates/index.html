@@ -524,7 +524,9 @@
       return 1;
     }
 
-    function namkhaForm() {
+    // Every field Reset restores. timezoneOptions is deliberately NOT here: it
+    // is loaded once in init() and must survive a reset.
+    function initialFormState() {
       return {
         method: 'CNNR',
         namkhaType: 'YEAR',
@@ -541,12 +543,18 @@
         detectedTimezone: '',
         timezone: '',
         timezoneQuery: '',
-        timezoneOptions: [],
         timezoneSuggestions: [],
         timezoneActiveIndex: -1,
         utcOffsetSign: '+',
         utcOffsetTime: '',
         onSummerTime: '',
+      };
+    }
+
+    function namkhaForm() {
+      return {
+        ...initialFormState(),
+        timezoneOptions: [],
 
         init() {
           this.timezoneOptions = JSON.parse(
@@ -725,28 +733,7 @@
         },
 
         resetForm() {
-          Object.assign(this, {
-            method: 'CNNR',
-            namkhaType: 'YEAR',
-            gender: 'MALE',
-            placeQuery: '',
-            suggestions: [],
-            activeIndex: -1,
-            manualCoords: false,
-            latitude: '',
-            longitude: '',
-            timezoneMode: 'auto',
-            detectedTimezone: '',
-            timezone: '',
-            timezoneQuery: '',
-            timezoneSuggestions: [],
-            timezoneActiveIndex: -1,
-            utcOffsetSign: '+',
-            utcOffsetTime: '',
-            onSummerTime: '',
-            isSearchingPlaces: false,
-            placesError: '',
-          });
+          Object.assign(this, initialFormState());
           // Native-only fields (no x-model) — clear by hand.
           this.$refs.name.value = '';
           this.$refs.birthDate.value = '';
@@ -758,26 +745,22 @@
         // match app/forms.py FIELDS; `location_name` fills the place field, which
         // submits as the location name) to the form, same fields resetForm() clears.
         applyFixture(data) {
-          Object.assign(this, {
+          // Start from the defaults, then override only what the fixture sets,
+          // so a field added to the form can't be left stale here.
+          Object.assign(this, initialFormState(), {
             method: data.method,
             namkhaType: data.namkha_type,
             gender: data.gender,
             placeQuery: data.location_name || '',
-            suggestions: [],
-            activeIndex: -1,
             manualCoords: true,
             latitude: data.latitude,
             longitude: data.longitude,
             timezoneMode: data.utc_offset ? 'offset' : (data.timezone ? 'list' : 'auto'),
-            detectedTimezone: '',
             timezone: data.timezone || '',
             timezoneQuery: data.timezone || '',
-            timezoneSuggestions: [],
-            timezoneActiveIndex: -1,
             utcOffsetSign: data.utc_offset ? data.utc_offset[0] : '+',
             utcOffsetTime: data.utc_offset ? data.utc_offset.slice(1) : '',
             onSummerTime: data.on_summer_time || '',
-            placesError: '',
           });
           this.$refs.name.value = data.name || '';
           this.$refs.birthDate.value = data.birth_date;
