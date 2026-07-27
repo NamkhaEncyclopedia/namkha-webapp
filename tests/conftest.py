@@ -201,9 +201,11 @@ def _reset_timezone_state():
     so request counts and cached lookups don't leak between tests."""
     main._timezone_hits.clear()
     main._cached_timezone.cache_clear()
+    main._last_sweep.clear()  # shared by both limiter stores
     yield
     main._timezone_hits.clear()
     main._cached_timezone.cache_clear()
+    main._last_sweep.clear()
 
 
 @pytest.fixture(autouse=True)

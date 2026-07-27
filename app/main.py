@@ -84,6 +84,9 @@ def _timezone_finder():
 TIMEZONE_RATE_LIMIT = 30  # requests per window per client
 TIMEZONE_RATE_WINDOW = 60.0  # seconds
 _timezone_hits: dict[str, tuple[float, int]] = {}
+# Last sweep time per bucket store, so the stale-bucket scan runs at most once
+# per window instead of on every request once the store is large.
+_last_sweep: dict[int, float] = {}
 
 
 @lru_cache(maxsize=4096)
@@ -144,7 +147,8 @@ def _rate_limited(
     its own bucket past O(1). In-memory, so per-worker: running uvicorn with
     N workers multiplies the effective limit by N."""
     now = time.monotonic()
-    if len(hits) > 1024:  # sweep stale buckets so unique IPs can't leak
+    if now - _last_sweep.get(id(hits), 0.0) >= window:
+        _last_sweep[id(hits)] = now
         for key, (start, _) in list(hits.items()):
             if now - start >= window:
                 del hits[key]
