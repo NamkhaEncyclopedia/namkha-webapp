@@ -10,6 +10,10 @@
 # before the secret is ever used. The test sitekey works on any hostname.
 set -euo pipefail
 
+# Run from the repo root whatever the caller's cwd is, so poetry finds
+# pyproject.toml (the parent justfile invokes this from one level up).
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
 export NAMKHA_TEST_MODE=1
 export NAMKHA_LOG_SALT="${NAMKHA_LOG_SALT:-dev}"
 export TURNSTILE_SECRET="${TURNSTILE_SECRET:-1x0000000000000000000000000000000AA}"
