@@ -9,10 +9,6 @@ from pathlib import Path
 
 import namkha_calculator as nc
 
-# TODO: private library member; switch to the public zone-list API once
-# namkha-calculator exposes one.
-from namkha_calculator.astronomy import _zone_tab_rows
-
 # Versions surfaced in the UI as flat badges, computed once at import.
 # Library: same call the sheet render uses, so page and sheet never disagree.
 # App: read from pyproject (package-mode=false, so not an installed dist).
@@ -174,6 +170,5 @@ def _tz_label(zone_name: str) -> str:
 # Geographic zones from the library's bundled zone.tab: the canonical picker
 # set, without the legacy aliases the full tzdata tree also carries.
 TIMEZONES = [
-    (zone_name, _tz_label(zone_name))
-    for zone_name in sorted({key for _, _, key in _zone_tab_rows()})
+    (zone_name, _tz_label(zone_name)) for zone_name in sorted(set(nc.zone_keys()))
 ]
