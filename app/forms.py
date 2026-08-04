@@ -44,6 +44,35 @@ MAX_NAME_LENGTH = 100
 MAX_LOCATION_NAME_LENGTH = 200
 
 
+# Signed hours with optional minutes: +5, -3:30, +05:45.
+UTC_OFFSET_PATTERN = re.compile(r"([+-])(\d{1,2})(?::([0-5]\d))?")
+
+# Widest offset any real clock has kept, matching the library's own bound.
+MAX_UTC_OFFSET = timedelta(hours=16)
+
+# The summer-time select. Blank is a viable answer: the user is not sure.
+ON_SUMMER_TIME_VALUES = {"": None, "true": True, "false": False}
+
+
+def parse_utc_offset(text: str) -> timedelta:
+    """A "+-HH:MM" style offset as a timedelta."""
+    match = UTC_OFFSET_PATTERN.fullmatch(text)
+    if match is None:
+        raise ValueError("Enter a UTC offset like +5:45 or -3:30.")
+    offset = timedelta(hours=int(match.group(2)), minutes=int(match.group(3) or 0))
+    if offset > MAX_UTC_OFFSET:
+        raise ValueError("UTC offset must be between -16:00 and +16:00.")
+    return offset if match.group(1) == "+" else -offset
+
+
+def parse_on_summer_time(text: str) -> bool | None:
+    """Whether summer time was in effect at birth, or None when unknown."""
+    answer = text.strip()
+    if answer not in ON_SUMMER_TIME_VALUES:
+        raise ValueError("Choose yes, no, or not sure for summer time.")
+    return ON_SUMMER_TIME_VALUES[answer]
+
+
 def build_request(form) -> NamkhaRequest:
     """Parse a form mapping into a NamkhaRequest.
 
@@ -73,17 +102,7 @@ def build_request(form) -> NamkhaRequest:
     timezone_name = (form.get("timezone") or "").strip()
     utc_offset_text = (form.get("utc_offset") or "").strip()
     if utc_offset_text:
-        offset_match = re.fullmatch(r"([+-])(\d{1,2})(?::([0-5]\d))?", utc_offset_text)
-        if offset_match is None:
-            raise ValueError("Enter a UTC offset like +5:45 or -3:30.")
-        offset = timedelta(
-            hours=int(offset_match.group(2)), minutes=int(offset_match.group(3) or 0)
-        )
-        if offset > timedelta(hours=16):
-            raise ValueError("UTC offset must be between -16:00 and +16:00.")
-        birth_timezone = nc.fixed_offset(
-            offset if offset_match.group(1) == "+" else -offset
-        )
+        birth_timezone = nc.fixed_offset(parse_utc_offset(utc_offset_text))
     elif timezone_name:
         try:
             birth_timezone = nc.zone(timezone_name)
@@ -92,14 +111,9 @@ def build_request(form) -> NamkhaRequest:
     else:
         birth_timezone = None
 
-    # Tri-state radio for a birth time in the repeated fall-back hour:
-    # "" -> None (library guesses and notes it), "true"/"false" pin the reading.
-    try:
-        on_summer_time = {"": None, "true": True, "false": False}[
-            (form.get("on_summer_time") or "").strip()
-        ]
-    except KeyError as exc:
-        raise ValueError("Select whether summer time was in effect at birth.") from exc
+    # Tri-state for a birth time in the repeated fall-back hour: unset means the
+    # library guesses and notes it, yes/no pin the reading.
+    on_summer_time = parse_on_summer_time(form.get("on_summer_time") or "")
 
     try:
         latitude = float(form["latitude"])

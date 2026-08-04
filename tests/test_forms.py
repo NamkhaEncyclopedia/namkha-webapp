@@ -165,7 +165,7 @@ def test_on_summer_time_tri_state(raw, expected):
         ({"utc_offset": "+16:30"}, "UTC offset must be between -16:00 and +16:00."),
         (
             {"on_summer_time": "maybe"},
-            "Select whether summer time was in effect at birth.",
+            "Choose yes, no, or not sure for summer time.",
         ),
         ({"latitude": "abc"}, "Latitude and longitude must be numbers."),
         (

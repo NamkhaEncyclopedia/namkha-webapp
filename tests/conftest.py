@@ -200,11 +200,11 @@ def _reset_timezone_state():
     """The /timezone limiter keeps process-global state; reset it around every test
     so request counts and cached lookups don't leak between tests."""
     main._timezone_hits.clear()
-    main._cached_timezone.cache_clear()
+    main._cached_derive_timezone.cache_clear()
     main._last_sweep.clear()  # shared by both limiter stores
     yield
     main._timezone_hits.clear()
-    main._cached_timezone.cache_clear()
+    main._cached_derive_timezone.cache_clear()
     main._last_sweep.clear()
 
 

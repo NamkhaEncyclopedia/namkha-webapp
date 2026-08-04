@@ -654,15 +654,31 @@
         },
 
         async fetchTimezone() {
-          if (this.latitude === '' || this.longitude === '') return;
+          // The birth date decides which time zone applied, and the birth time
+          // decides how it reads, so neither can be left out.
+          const birthDate = this.$refs.birthDate?.value;
+          const birthTime = this.$refs.birthTime?.value;
+          if (this.latitude === '' || this.longitude === '' || !birthDate || !birthTime) return;
+          const params = new URLSearchParams({
+            latitude: this.latitude,
+            longitude: this.longitude,
+            birth_date: birthDate,
+            birth_time: birthTime,
+          });
+          // Either way below, the previously detected zone stays on screen. Log
+          // it, so a zone that quietly stops updating is traceable rather than
+          // being reported as "it just doesn't work sometimes".
           try {
-            const response = await fetch(
-              `/timezone?latitude=${this.latitude}&longitude=${this.longitude}`
-            );
+            const response = await fetch(`/timezone?${params}`);
+            if (!response.ok) {
+              const detail = await response.json().catch(() => null);
+              console.warn('Time zone lookup rejected:', response.status, detail);
+              return;
+            }
             const data = await response.json();
             if (data.timezone) this.detectedTimezone = data.timezone;
           } catch (error) {
-            /* keep the current detected timezone on failure */
+            console.warn('Time zone lookup failed:', error);
           }
         },
 

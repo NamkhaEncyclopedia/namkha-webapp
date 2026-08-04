@@ -447,21 +447,101 @@ def test_userfriendly_error_drops_internal_detail():
 # --- /timezone --------------------------------------------------------------------
 
 
+BERLIN_1985 = {
+    "latitude": 52.52,
+    "longitude": 13.40,
+    "birth_date": "1985-06-15",
+    "birth_time": "12:00",
+}
+
+KATHMANDU_1985 = {
+    "latitude": 27.7172,
+    "longitude": 85.3240,
+    "birth_date": "1985-06-15",
+    "birth_time": "12:00",
+}
+
+LVIV_1940 = {
+    "latitude": 49.8397,
+    "longitude": 24.0297,
+    "birth_date": "1940-06-15",
+    "birth_time": "12:00",
+}
+
+
 def test_timezone_lookup_ok(client):
-    response = client.get("/timezone", params={"latitude": 52.52, "longitude": 13.40})
+    response = client.get("/timezone", params=BERLIN_1985)
     assert response.status_code == 200
-    assert response.json()["timezone"] == "Europe/Berlin"
+    body = response.json()
+    assert body["timezone"] == "Europe/Berlin"
+    assert body["derivation"] == "CERTAIN"
+    assert body["resolved_timezone"].startswith("v1|LOCATION_DERIVED|Europe/Berlin|")
+
+
+def test_timezone_reports_how_sure_a_historical_answer_is(client):
+    """Lviv changed hands around 1940, so the form has to be told the zone is
+    a guess before the user commits to a chart."""
+    response = client.get("/timezone", params=LVIV_1940)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["timezone"] == "Europe/Warsaw"
+    assert body["derivation"] == "BORDERS_UNCERTAIN"
+
+
+def test_timezone_accepts_a_chosen_zone(client):
+    response = client.get(
+        "/timezone", params={**BERLIN_1985, "timezone": "Europe/Berlin"}
+    )
+    assert response.status_code == 200
+    assert response.json()["resolved_timezone"].startswith(
+        "v1|USER_ZONE|Europe/Berlin|"
+    )
+
+
+def test_timezone_accepts_a_provided_offset(client):
+    response = client.get("/timezone", params={**KATHMANDU_1985, "utc_offset": "+5:45"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["timezone"] is None
+    assert body["resolved_timezone"].startswith("v1|USER_OFFSET||20700|")
+
+
+def test_timezone_refuses_an_offset_that_does_not_suit_the_place(client):
+    """The user learns the pairing is wrong while picking it, not after
+    submitting a chart built on it."""
+    response = client.get("/timezone", params={**BERLIN_1985, "utc_offset": "-4:00"})
+    assert response.status_code == 400
+
+
+def test_timezone_refuses_an_unknown_zone(client):
+    response = client.get(
+        "/timezone", params={**BERLIN_1985, "timezone": "Mars/Phobos"}
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Select a valid birth time zone."
+
+
+def test_timezone_never_invents_an_answer(client):
+    """A time zone that cannot be worked out must not come back as a usable
+    value; the form has to block instead."""
+    response = client.get("/timezone", params={**BERLIN_1985, "utc_offset": "+22"})
+    assert response.status_code == 400
+    assert "resolved_timezone" not in response.json()
 
 
 @pytest.mark.parametrize(
     "params",
     [
-        {"latitude": 91, "longitude": 0},
-        {"latitude": 0, "longitude": 181},
-        {"latitude": "nan", "longitude": 0},
+        {**BERLIN_1985, "latitude": 91},
+        {**BERLIN_1985, "longitude": 181},
+        {**BERLIN_1985, "latitude": "nan"},
+        {**BERLIN_1985, "birth_date": "not-a-date"},
+        {**BERLIN_1985, "birth_time": "half past two"},
+        {key: value for key, value in BERLIN_1985.items() if key != "birth_date"},
+        {key: value for key, value in BERLIN_1985.items() if key != "birth_time"},
     ],
 )
-def test_timezone_rejects_bad_coordinates(client, params):
+def test_timezone_rejects_bad_input(client, params):
     assert client.get("/timezone", params=params).status_code == 422
 
 
@@ -477,7 +557,5 @@ def test_timezone_rate_limited_pure_function():
 def test_timezone_http_429_after_limit(client):
     response = None
     for _ in range(main.TIMEZONE_RATE_LIMIT + 1):
-        response = client.get(
-            "/timezone", params={"latitude": 52.52, "longitude": 13.40}
-        )
+        response = client.get("/timezone", params=BERLIN_1985)
     assert response.status_code == 429

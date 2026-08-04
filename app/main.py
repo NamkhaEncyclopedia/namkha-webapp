@@ -11,16 +11,19 @@ import threading
 import time
 from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from datetime import time as time_of_day  # `time` is the module, imported above
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfoNotFoundError
 
 import namkha_calculator as nc
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from namkha_calculator.zone_derivation import derive_timezone
 from starlette.concurrency import run_in_threadpool
 
 from app import constants, turnstile
@@ -32,7 +35,10 @@ from app.forms import (
     MAX_NAME_LENGTH,
     NamkhaRequest,
     build_request,
+    parse_on_summer_time,
+    parse_utc_offset,
 )
+from app.resolved_timezone import serialize_resolved_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -68,20 +74,11 @@ templates = Jinja2Templates(directory=BASE / "templates")
 TEST_MODE_ENABLED = os.getenv("NAMKHA_TEST_MODE") == "1"
 
 
-@lru_cache(maxsize=1)
-def _timezone_finder():
-    """Lazily build the finder on first /timezone hit. Import + construction load
-    boundary data and can fail (bad install, missing data); deferring it keeps a
-    failure from taking down the whole app at startup -- only /timezone degrades."""
-    from timezonefinder import TimezoneFinder
-
-    return TimezoneFinder()
-
-
-# /timezone abuse protection. The lookup is an in-memory boundary search (no
-# external API), so the cost is CPU. Cache keeps repeated/nearby coordinates
-# cheap; a per-IP fixed window caps how hard one client can hammer the endpoint.
-TIMEZONE_RATE_LIMIT = 30  # requests per window per client
+# /timezone abuse protection. Working out a time zone costs CPU in this process
+# - a polygon search, and for a pre-1970 birth a ray cast over the historical
+# border maps - so the cache keeps repeats cheap and a per-IP fixed window caps
+# how hard one client can hammer the endpoint.
+TIMEZONE_RATE_LIMIT = 120  # requests per window per client
 TIMEZONE_RATE_WINDOW = 60.0  # seconds
 _timezone_hits: dict[str, tuple[float, int]] = {}
 # Last sweep time per bucket store, so the stale-bucket scan runs at most once
@@ -90,14 +87,32 @@ _last_sweep: dict[int, float] = {}
 
 
 @lru_cache(maxsize=4096)
-def _cached_timezone(latitude: float, longitude: float) -> str | None:
-    """Boundary lookup keyed on rounded coordinates (see timezone_lookup).
-    Returns None if the finder can't be built or the lookup fails, so the
-    endpoint falls back to UTC instead of erroring."""
-    try:
-        return _timezone_finder().timezone_at(lat=latitude, lng=longitude)
-    except Exception:
-        return None
+def _cached_derive_timezone(
+    latitude: float,
+    longitude: float,
+    birth_datetime: datetime,
+    zone_key: str | None,
+    offset_seconds: int | None,
+    on_summer_time: bool | None,
+) -> nc.ResolvedTimezone:
+    """The library's time zone derivation, cached.
+
+    What comes back is a zone, not an offset. Which zone applied turns on the
+    date; the zone keeps its own clock changes, so the offset is worked out
+    later, when the calculation applies the zone to the birth time. The time of
+    day still matters here for a zone or offset the user supplied, which is
+    checked against the place at that instant.
+
+    Nothing here catches errors. A time zone that cannot be worked out has to
+    reach the user.
+    """
+    return derive_timezone(
+        nc.Location(latitude=latitude, longitude=longitude),
+        birth_datetime,
+        zone_key=zone_key,
+        offset=None if offset_seconds is None else timedelta(seconds=offset_seconds),
+        on_summer_time=on_summer_time,
+    )
 
 
 # Trusted proxy handling for the rate-limit client key. Comma-separated IPs/CIDRs
@@ -634,21 +649,55 @@ async def download_pdf(request: Request):
 @app.get("/timezone")
 async def timezone_lookup(
     request: Request,
+    birth_date: date,
+    birth_time: time_of_day,
     # Declarative bounds: FastAPI rejects out-of-range / non-numeric / inf / nan
     # before the body runs, returning a structured 422 naming the bad field.
     latitude: float = Query(ge=-90, le=90, allow_inf_nan=False),
     longitude: float = Query(ge=-180, le=180, allow_inf_nan=False),
+    timezone: str = Query(default=""),
+    utc_offset: str = Query(default=""),
+    on_summer_time: str = Query(default=""),
 ):
-    """IANA time zone for a coordinate; used by the form to auto-fill the zone."""
+    """Settle the birth time zone, which the form then submits back unchanged.
+
+    This is the only place a time zone is worked out. The answer carries how
+    sure it is, so the user sees any doubt before committing to a chart rather
+    than finding it on the finished sheet.
+    """
     client = _client_ip(request)
     if _timezone_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
-    # Round to ~110m: finer than any time zone boundary, lifts the cache hit rate.
-    # Boundary search is CPU-bound; offload so it doesn't block the event loop.
-    zone = await run_in_threadpool(
-        _cached_timezone, round(latitude, 3), round(longitude, 3)
-    )
-    return {"timezone": zone or "UTC"}
+
+    try:
+        offset = parse_utc_offset(utc_offset) if utc_offset.strip() else None
+        summer_time = parse_on_summer_time(on_summer_time)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    try:
+        # CPU-bound; offload so it doesn't block the event loop.
+        resolved = await run_in_threadpool(
+            _cached_derive_timezone,
+            latitude,
+            longitude,
+            datetime.combine(birth_date, birth_time),
+            timezone.strip() or None,
+            None if offset is None else round(offset.total_seconds()),
+            summer_time,
+        )
+    except ZoneInfoNotFoundError as error:
+        raise HTTPException(
+            status_code=400, detail="Select a valid birth time zone."
+        ) from error
+    except nc.TimezoneError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return {
+        "resolved_timezone": serialize_resolved_timezone(resolved),
+        "timezone": resolved.key,
+        "derivation": resolved.derivation.name,
+    }
 
 
 if TEST_MODE_ENABLED:
