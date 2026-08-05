@@ -2,8 +2,11 @@
 
 The time zone is settled once, while the user is entering birth details, and
 has to survive the trip back to /calculate and again to /download.pdf. It
-travels as one hidden field holding the text below, so the two submit paths
-cannot disagree about it and a changed birthplace cannot go unnoticed.
+travels as one hidden field holding the text below, so both submit paths carry
+the same answer.
+
+The value records the birth details it was worked out for, which is what will
+let the calculation refuse a mismatched one. Nothing checks that yet.
 
 The text is readable and unsigned on purpose: it can be read in devtools or
 pasted into a bug report. It guards against the form and the calculation

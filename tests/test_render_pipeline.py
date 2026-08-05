@@ -16,7 +16,7 @@ import pytest
 from lxml import etree
 from namkha_calculator.calculation_notes import CalculationNote, CalculationNoteType
 
-from app import constants
+from app import constants, notes
 from app.calculation_render import (
     SVG_NS,
     _build_data,
@@ -136,7 +136,7 @@ def test_notes_use_friendly_overrides(make_result):
     data = _build_data(make_result(notes=[note]))
     assert data["notes"] == [
         {
-            "message": constants.NOTE_MESSAGES[CalculationNote.HIGH_LATITUDE],
+            "message": notes.NOTE_MESSAGES[CalculationNote.HIGH_LATITUDE],
             "kind": "caution",
         }
     ]
@@ -144,7 +144,7 @@ def test_notes_use_friendly_overrides(make_result):
 
 def test_unmapped_note_falls_back_to_library_message(make_result, monkeypatch):
     # A note with no app override still renders, using the library's message.
-    monkeypatch.delitem(constants.NOTE_MESSAGES, CalculationNote.HIGH_LATITUDE)
+    monkeypatch.delitem(notes.NOTE_MESSAGES, CalculationNote.HIGH_LATITUDE)
     note = nc.CalculationNoteItem(
         note=CalculationNote.HIGH_LATITUDE,
         note_type=CalculationNoteType.CAUTION,

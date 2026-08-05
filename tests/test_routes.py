@@ -3,9 +3,10 @@ helpers they depend on."""
 
 import logging
 
+import namkha_calculator as nc
 import pytest
 
-from app import main, turnstile
+from app import main, notes, turnstile
 
 
 def test_index_ok(client):
@@ -506,10 +507,54 @@ def test_timezone_accepts_a_provided_offset(client):
     assert body["resolved_timezone"].startswith("v1|USER_OFFSET||20700|")
 
 
+def test_timezone_reports_what_the_entered_details_imply(client):
+    """The uncertainty reaches the user while the form is open, not only on the
+    finished sheet."""
+    body = client.get("/timezone", params=LVIV_1940).json()
+    assert body["notes"] == [
+        {
+            "message": notes.NOTE_MESSAGES[
+                nc.CalculationNote.TIMEZONE_BORDERS_UNCERTAIN
+            ],
+            "kind": "caution",
+        }
+    ]
+
+
+def test_the_form_and_the_sheet_word_a_note_the_same_way(client):
+    """Both go through notes_for_display, so a note cannot read one way under
+    the form and another on the sheet."""
+    body = client.get("/timezone", params=LVIV_1940).json()
+    from_sheet = notes.notes_for_display(
+        (
+            nc.CalculationNoteItem(
+                note=nc.CalculationNote.TIMEZONE_BORDERS_UNCERTAIN,
+                note_type=nc.CalculationNoteType.CAUTION,
+                message="developer-facing text",
+            ),
+        )
+    )
+    assert body["notes"] == from_sheet
+
+
+def test_a_settled_zone_carries_no_notes(client):
+    assert client.get("/timezone", params=BERLIN_1985).json()["notes"] == []
+
+
 def test_timezone_refuses_an_offset_that_does_not_suit_the_place(client):
     """The user learns the pairing is wrong while picking it, not after
     submitting a chart built on it."""
     response = client.get("/timezone", params={**BERLIN_1985, "utc_offset": "-4:00"})
+    assert response.status_code == 400
+
+
+def test_timezone_refuses_a_zone_and_an_offset_together(client):
+    """The library rejects the pair with a plain ValueError, which would escape
+    as a 500 while every other bad input on this route answers 400."""
+    response = client.get(
+        "/timezone",
+        params={**BERLIN_1985, "timezone": "Europe/Berlin", "utc_offset": "+1:00"},
+    )
     assert response.status_code == 400
 
 

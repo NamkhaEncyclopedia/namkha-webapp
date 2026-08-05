@@ -28,6 +28,10 @@ FIELDS = (
     "timezone",
     "utc_offset",
     "on_summer_time",
+    # The time zone the /timezone route worked out, submitted back unchanged.
+    # It has to be listed here: only the fields in this list are carried over
+    # to the Download PDF button, which re-submits the whole form.
+    "resolved_timezone",
     "latitude",
     "longitude",
     "namkha_type",

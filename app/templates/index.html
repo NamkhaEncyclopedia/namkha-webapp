@@ -242,6 +242,7 @@
                            class="input-text"
                            x-model="latitude"
                            :disabled="!manualCoords"
+                           @input="invalidateTimezone()"
                            @change="fetchTimezone()">
                     <input type="hidden" name="latitude" :value="latitude">
                   </div>
@@ -255,6 +256,7 @@
                            class="input-text"
                            x-model="longitude"
                            :disabled="!manualCoords"
+                           @input="invalidateTimezone()"
                            @change="fetchTimezone()">
                     <input type="hidden" name="longitude" :value="longitude">
                   </div>
@@ -282,7 +284,9 @@
                        name="birth_date"
                        class="input-text"
                        required
-                       x-ref="birthDate">
+                       x-ref="birthDate"
+                       @input="invalidateTimezone()"
+                       @change="fetchTimezone()">
                 <div class="input-columns">
                   <div>
                     <label for="birth_time" class="label-major">Birth time:</label>
@@ -291,7 +295,9 @@
                            name="birth_time"
                            class="input-text"
                            required
-                           x-ref="birthTime">
+                           x-ref="birthTime"
+                           @input="invalidateTimezone()"
+                           @change="fetchTimezone()">
                   </div>
                   <div>
                     <label for="timezone-mode">Birth time zone:</label>
@@ -316,6 +322,11 @@
                     <input type="hidden"
                            name="utc_offset"
                            :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
+                    <!-- The zone settled by /timezone, submitted back unchanged.
+                         Empty until a lookup succeeds. Nothing reads it on
+                         submit yet: binding it to the calculation is the next
+                         step, and until then the library still derives its own. -->
+                    <input type="hidden" name="resolved_timezone" :value="resolvedTimezone">
                   </div>
                 </div>
                 <template x-if="timezoneMode === 'auto'">
@@ -366,7 +377,8 @@
                     <label for="utc-offset-sign" class="sr-only">Offset direction</label>
                     <select id="utc-offset-sign"
                             class="input-text utc-offset-sign"
-                            x-model="utcOffsetSign">
+                            x-model="utcOffsetSign"
+                            @change="fetchTimezone()">
                       <option value="+">+</option>
                       <option value="-">-</option>
                     </select>
@@ -380,6 +392,8 @@
                            pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
                            title="Hours 0 to 16, with optional minutes, like 5:45"
                            x-model="utcOffsetTime"
+                           @input="invalidateTimezone()"
+                           @change="fetchTimezone()"
                            x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')">
                   </div>
                 </template>
@@ -399,12 +413,26 @@
                           name="on_summer_time"
                           class="input-text"
                           x-model="onSummerTime"
+                          @change="fetchTimezone()"
                           :disabled="timezoneMode === 'offset'">
                     <option value="">Not sure</option>
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
                 </div>
+                <!-- What the entered details already imply, shown before the
+                     calculation runs. Notes that need the finished result, such
+                     as a birth time next to a period boundary, appear on the
+                     sheet only. -->
+                <template x-if="timezoneNotes.length">
+                  <ul class="input-notes" role="status" x-cloak>
+                    <template x-for="note in timezoneNotes" :key="note.message">
+                      <li class="input-note"
+                          :class="'input-note--' + note.kind"
+                          x-text="note.message"></li>
+                    </template>
+                  </ul>
+                </template>
                 <div class="inline-tooltip"
                      role="alert"
                      x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)"
@@ -541,6 +569,14 @@
         longitude: '',
         timezoneMode: 'auto',
         detectedTimezone: '',
+        // Written only by a /timezone reply, cleared by any edit that could
+        // change it. Empty means "not settled yet", never "unchanged".
+        resolvedTimezone: '',
+        timezoneNotes: [],
+        // Counts lookups so a slow reply cannot overwrite a newer one. A
+        // pre-1970 date searches the historical border maps and can take much
+        // longer than the modern date typed after it.
+        timezoneRequestId: 0,
         timezone: '',
         timezoneQuery: '',
         timezoneSuggestions: [],
@@ -564,12 +600,16 @@
             label,
             normalized: label.toLowerCase().replaceAll('_', ' ').replaceAll('/', ' '),
           }));
-          // Entering list mode with a detected zone pre-commits it as the selection.
+          // Switching to the list fills in the zone that was already detected,
+          // so the user does not have to find it again. Every switch also asks
+          // for the zone again, because each mode sends different fields.
           this.$watch('timezoneMode', mode => {
             if (mode === 'list' && !this.timezone && !this.timezoneQuery.trim() && this.detectedTimezone) {
               this.timezone = this.detectedTimezone;
               this.timezoneQuery = this.detectedTimezone;
             }
+            // Runs last, so a zone filled in above goes with the request.
+            this.fetchTimezone();
           });
         },
 
@@ -653,30 +693,55 @@
           }
         },
 
+        // Forget a settled time zone, as soon as any input behind it is touched.
+        // A stale value would print a sheet for the wrong zone. An empty one is
+        // refused on submit instead.
+        invalidateTimezone() {
+          this.resolvedTimezone = '';
+          this.timezoneNotes = [];
+        },
+
         async fetchTimezone() {
+          this.invalidateTimezone();
+          const requestId = ++this.timezoneRequestId;
           // The birth date decides which time zone applied, and the birth time
           // decides how it reads, so neither can be left out.
           const birthDate = this.$refs.birthDate?.value;
           const birthTime = this.$refs.birthTime?.value;
           if (this.latitude === '' || this.longitude === '' || !birthDate || !birthTime) return;
+          // In 'list' and 'offset' mode the user has named the zone. Send it, so the
+          // answer is about the zone the sheet will use, not the one the birth
+          // place implies. An incomplete choice is not worth asking about yet.
+          const chosenZone = this.timezoneMode === 'list' ? this.timezone : '';
+          const chosenOffset = this.timezoneMode === 'offset' ? this.utcOffsetSign + this.utcOffsetTime : '';
+          if (this.timezoneMode === 'list' && !chosenZone) return;
+          if (this.timezoneMode === 'offset' && !this.utcOffsetTime) return;
           const params = new URLSearchParams({
             latitude: this.latitude,
             longitude: this.longitude,
             birth_date: birthDate,
             birth_time: birthTime,
+            timezone: chosenZone,
+            utc_offset: chosenOffset,
+            on_summer_time: this.timezoneMode === 'offset' ? '' : this.onSummerTime,
           });
-          // Either way below, the previously detected zone stays on screen. Log
-          // it, so a zone that quietly stops updating is traceable rather than
-          // being reported as "it just doesn't work sometimes".
+          // Both failure exits below leave the settled zone empty. That is the
+          // safe outcome: no zone at all, rather than one that does not fit the
+          // entered details. Both log, so a lookup that quietly stops working
+          // can be traced.
           try {
             const response = await fetch(`/timezone?${params}`);
+            if (requestId !== this.timezoneRequestId) return;  // superseded
             if (!response.ok) {
               const detail = await response.json().catch(() => null);
               console.warn('Time zone lookup rejected:', response.status, detail);
               return;
             }
             const data = await response.json();
-            if (data.timezone) this.detectedTimezone = data.timezone;
+            if (requestId !== this.timezoneRequestId) return;  // superseded
+            this.resolvedTimezone = data.resolved_timezone;
+            this.timezoneNotes = data.notes;
+            this.detectedTimezone = data.timezone || '';
           } catch (error) {
             console.warn('Time zone lookup failed:', error);
           }
@@ -684,6 +749,7 @@
 
         searchTimezones() {
           this.timezone = '';  // typing invalidates the committed choice
+          this.invalidateTimezone();
           this.timezoneActiveIndex = -1;
           const query = this.timezoneQuery.trim().toLowerCase()
             .replaceAll('_', ' ').replaceAll('/', ' ');
@@ -700,6 +766,7 @@
           this.timezoneQuery = option.key;
           this.timezoneSuggestions = [];
           this.timezoneActiveIndex = -1;
+          this.fetchTimezone();
         },
 
         commitTimezoneOnBlur() {
@@ -710,7 +777,11 @@
           const exact = this.timezoneOptions.find(
             option => option.key.toLowerCase() === typed
           );
-          if (exact) { this.timezone = exact.key; this.timezoneQuery = exact.key; }
+          if (exact) {
+            this.timezone = exact.key;
+            this.timezoneQuery = exact.key;
+            this.fetchTimezone();
+          }
         },
 
         onTimezoneKeydown(event) {
@@ -781,6 +852,9 @@
           this.$refs.name.value = data.name || '';
           this.$refs.birthDate.value = data.birth_date;
           this.$refs.birthTime.value = data.birth_time;
+          // Fixtures carry no settled zone: it would be stale the moment the
+          // file was written. Ask for one now, as the form is complete.
+          this.fetchTimezone();
         },
       };
     }

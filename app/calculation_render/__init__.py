@@ -18,9 +18,9 @@ from pathlib import Path
 import namkha_calculator as nc
 import typst
 from lxml import etree
-from namkha_calculator.calculation_notes import CalculationNoteType
 
 from app import constants
+from app.notes import notes_for_display
 
 TEMPLATES = Path(__file__).parent / "templates"
 FONTS = Path(__file__).parent / "fonts"
@@ -335,21 +335,7 @@ def _build_data(result) -> dict:
             "app_version": constants.APP_VERSION,
         },
         "aspects": aspects,
-        "notes": [
-            {
-                "message": constants.NOTE_MESSAGES.get(note.note, note.message),
-                # Severity picks the icon the sheet draws: caution vs. info.
-                "kind": (
-                    "caution"
-                    if note.note_type == CalculationNoteType.CAUTION
-                    else "notice"
-                ),
-            }
-            for note in sorted(
-                result.calculation_notes,
-                key=lambda note: note.note_type != CalculationNoteType.CAUTION,
-            )
-        ],
+        "notes": notes_for_display(result.calculation_notes),
     }
 
 

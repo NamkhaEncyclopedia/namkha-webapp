@@ -38,6 +38,7 @@ from app.forms import (
     parse_on_summer_time,
     parse_utc_offset,
 )
+from app.notes import notes_for_display
 from app.resolved_timezone import serialize_resolved_timezone
 
 logger = logging.getLogger(__name__)
@@ -669,19 +670,28 @@ async def timezone_lookup(
     if _timezone_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
 
+    # The library refuses both at once with a plain ValueError, which would
+    # leave this route as the one input error that 500s instead of 400s.
+    if timezone.strip() and utc_offset.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Give either a time zone or a UTC offset, not both.",
+        )
+
     try:
         offset = parse_utc_offset(utc_offset) if utc_offset.strip() else None
         summer_time = parse_on_summer_time(on_summer_time)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
+    birth_datetime = datetime.combine(birth_date, birth_time)
     try:
         # CPU-bound; offload so it doesn't block the event loop.
         resolved = await run_in_threadpool(
             _cached_derive_timezone,
             latitude,
             longitude,
-            datetime.combine(birth_date, birth_time),
+            birth_datetime,
             timezone.strip() or None,
             None if offset is None else round(offset.total_seconds()),
             summer_time,
@@ -693,10 +703,14 @@ async def timezone_lookup(
     except nc.TimezoneError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
+    # input_notes below is deliberately outside _cached_derive_timezone: next to
+    # the polygon search it costs nothing, and keeping it out leaves that cache
+    # holding only the expensive part.
     return {
         "resolved_timezone": serialize_resolved_timezone(resolved),
         "timezone": resolved.key,
         "derivation": resolved.derivation.name,
+        "notes": notes_for_display(nc.input_notes(resolved, birth_datetime)),
     }
 
 

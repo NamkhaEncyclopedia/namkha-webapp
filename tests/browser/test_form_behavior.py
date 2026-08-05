@@ -7,6 +7,7 @@ and the birth-time precision warning becomes reachable. Flip these assertions th
 """
 
 import json
+import re
 
 import pytest
 from playwright.sync_api import expect
@@ -44,19 +45,48 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
         ),
     )
     page.goto(live_server)
+    # The birth date and time come first: which zone applied depends on them, so
+    # the lookup declines until both are set.
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
     page.fill("#place", "Berlin")
     suggestion = page.locator(".place-suggestion").first
     expect(suggestion).to_be_visible()
     suggestion.click()
-    # selectPlace fills lat/lon (4 dp); fetchTimezone previews the detected zone.
+    # selectPlace fills lat/lon (4 dp); fetchTimezone settles the zone.
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
-    # Automatic mode submits no zone; the library derives it server-side.
+    # The settled zone rides along in its own field, ready to submit back.
+    expect(page.locator("input[name='resolved_timezone']")).to_have_value(
+        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
+    )
+    # Automatic mode submits no chosen zone; the resolved value carries the answer.
     expect(page.locator("input[name='timezone']")).to_have_value("")
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
     # The selected label submits as the location name.
     expect(page.locator("input[name='location_name']")).to_have_value("Berlin, Germany")
+
+
+def test_editing_a_birth_detail_drops_the_settled_timezone(page, live_server):
+    """A settled zone belongs to the details it was worked out for. Editing one
+    must clear it, so a stale zone can never reach the calculation."""
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
+    resolved = page.locator("input[name='resolved_timezone']")
+    expect(resolved).to_have_value(re.compile(r"\|1985-06-15\|"))
+    # A different birth date can mean a different zone. What lands must be the
+    # answer for the new date, never the one worked out for the old one.
+    page.fill("#birth_date", "1940-06-15")
+    expect(resolved).to_have_value(re.compile(r"\|1940-06-15\|"))
+    # An edit that leaves nothing to look up clears the field and stops there,
+    # so an incomplete form has no zone to submit.
+    page.fill("#birth_time", "")
+    expect(resolved).to_have_value("")
 
 
 def test_timezone_modes_feed_hidden_inputs(page, live_server):
@@ -146,3 +176,64 @@ def test_manual_coords_make_place_a_plain_text_field(page, live_server):
     expect(page.locator("input[name='location_name']")).to_have_value(
         "Remote Ranch, Patagonia"
     )
+
+
+# Holds every /timezone reply open so the test decides what lands and in what
+# order. Installed before the page scripts run, so the form's own fetch is the
+# one replaced. Anything else (place autocomplete) passes straight through.
+_HOLD_TIMEZONE_REPLIES = """
+window.__heldTimezoneReplies = [];
+const realFetch = window.fetch;
+window.fetch = function (resource, ...rest) {
+  if (typeof resource === 'string' && resource.startsWith('/timezone?')) {
+    return new Promise(resolve => {
+      window.__heldTimezoneReplies.push({ url: resource, resolve });
+    });
+  }
+  return realFetch.apply(this, [resource, ...rest]);
+};
+"""
+
+# Answers the held requests in the given order, oldest request first in the list.
+_RELEASE_REPLIES = """
+(order) => {
+  const held = window.__heldTimezoneReplies;
+  for (const index of order) {
+    const body = {
+      resolved_timezone: 'reply-' + index,
+      timezone: 'Europe/Berlin',
+      derivation: 'CERTAIN',
+      notes: [],
+    };
+    held[index].resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  }
+}
+"""
+
+
+def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
+    """A pre-1970 date searches the historical border maps, so its reply can
+    arrive after that of a modern date typed later. The older answer must be
+    dropped, not written over the newer one."""
+    page.add_init_script(_HOLD_TIMEZONE_REPLIES)
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_time", "12:00")
+
+    # Only the two edits below may be in flight when the replies are released.
+    page.evaluate("() => { window.__heldTimezoneReplies = []; }")
+    page.fill("#birth_date", "1940-06-15")  # request 0, the slow one
+    page.fill("#birth_date", "1985-06-15")  # request 1, asked for later
+    page.wait_for_function("() => window.__heldTimezoneReplies.length === 2")
+
+    # The newer request answers first, the older one straggles in behind it.
+    page.evaluate(_RELEASE_REPLIES, [1, 0])
+    resolved = page.locator("input[name='resolved_timezone']")
+    expect(resolved).to_have_value("reply-1")
