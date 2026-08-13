@@ -700,8 +700,19 @@ async def timezone_lookup(
         raise HTTPException(
             status_code=400, detail="Select a valid birth time zone."
         ) from error
+    except nc.TimezoneLocationMismatchError as error:
+        raise HTTPException(
+            status_code=400,
+            detail="That time zone does not match the birth place. "
+            "Check the place and the time zone.",
+        ) from error
     except nc.TimezoneError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from error
+        # Nothing else reaches here today. Keep a plain answer rather than
+        # leaking the library's wording if something does.
+        raise HTTPException(
+            status_code=400,
+            detail="Could not work out the time zone for this birth.",
+        ) from error
 
     # input_notes below is deliberately outside _cached_derive_timezone: next to
     # the polygon search it costs nothing, and keeping it out leaves that cache
@@ -710,7 +721,13 @@ async def timezone_lookup(
         "resolved_timezone": serialize_resolved_timezone(resolved),
         "timezone": resolved.key,
         "derivation": resolved.derivation.name,
-        "notes": notes_for_display(nc.input_notes(resolved, birth_datetime)),
+        "notes": notes_for_display(
+            nc.input_notes(
+                resolved,
+                nc.Location(latitude=latitude, longitude=longitude),
+                birth_datetime,
+            )
+        ),
     }
 
 

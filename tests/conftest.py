@@ -16,6 +16,8 @@ from starlette.testclient import TestClient
 
 from app import main, turnstile
 from app.forms import NamkhaRequest
+from app.resolved_timezone import FIELD_NAME as RESOLVED_TIMEZONE_FIELD
+from tests import support
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -58,8 +60,15 @@ def fixture_form():
     The token is pre-marked Turnstile-verified for the same reason: /download.pdf
     only accepts a session that already passed the widget on /calculate."""
 
-    def load(name):
+    def load(name, **overrides):
         data = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
+        data.update(overrides)
+        # Every real submit carries a settled time zone, so a fixture form needs
+        # one too, and it has to match the data above. Subject refuses a value
+        # settled for a different place or date. Storing it in the JSON would go
+        # stale, and the test-mode picker reads those same files in a browser
+        # that settles the zone itself.
+        data[RESOLVED_TIMEZONE_FIELD] = support.resolved_timezone_field(data)
         session_token = main._issue_session_token("testclient")
         main._mark_session_verified(session_token)
         data["session_token"] = session_token
@@ -139,9 +148,11 @@ def _make_request(
         name=name,
         gender=gender,
         birth_datetime=birth_datetime,
-        birth_timezone=nc.zone(timezone),
         birth_location=nc.Location(
             latitude=latitude, longitude=longitude, name=location_name
+        ),
+        resolved_timezone=support.resolve_timezone(
+            latitude, longitude, birth_datetime, timezone
         ),
     )
     return NamkhaRequest(subject=subject, namkha_type=namkha_type, method=method)

@@ -5,8 +5,8 @@ has to survive the trip back to /calculate and again to /download.pdf. It
 travels as one hidden field holding the text below, so both submit paths carry
 the same answer.
 
-The value records the birth details it was worked out for, which is what will
-let the calculation refuse a mismatched one. Nothing checks that yet.
+The value records the birth details it was worked out for, and Subject refuses
+one that was worked out for a different place or date.
 
 The text is readable and unsigned on purpose: it can be read in devtools or
 pasted into a bug report. It guards against the form and the calculation
@@ -101,7 +101,7 @@ def parse_resolved_timezone(field_value: str) -> nc.ResolvedTimezone:
     field = dict(zip(_FIELDS, values, strict=True))
 
     try:
-        return nc.ResolvedTimezone(
+        resolved = nc.ResolvedTimezone(
             key=field["key"] or None,
             offset_seconds=(
                 None
@@ -120,5 +120,11 @@ def parse_resolved_timezone(field_value: str) -> nc.ResolvedTimezone:
                 field["gregorian_adoption_date"]
             ),
         )
+        # resolved.tzinfo is a cached_property: it builds the ZoneInfo or fixed
+        # offset only on first read. Read it now, so a key no tzdb knows or an
+        # offset past the 24 hour limit surfaces here as a parse error, not
+        # later as a bare 500 when the calculation reads it.
+        _ = resolved.tzinfo
     except (KeyError, ValueError) as error:
         raise ResolvedTimezoneParseError(str(error)) from error
+    return resolved

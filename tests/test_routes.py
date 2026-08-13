@@ -62,8 +62,8 @@ def test_calculate_library_error_is_friendly(client, fixture_form):
 
 
 def test_calculate_out_of_range_year(client, fixture_form):
-    form = fixture_form("year_classic_berlin")
-    form["birth_date"] = "0900-01-01"  # below the ephemeris range [1551, 2598]
+    # Below the ephemeris range [1551, 2598].
+    form = fixture_form("year_classic_berlin", birth_date="0900-01-01")
     response = client.post("/calculate", data=form)
     assert response.status_code == 200
     assert "outside the supported range" in response.text
@@ -546,6 +546,19 @@ def test_timezone_refuses_an_offset_that_does_not_suit_the_place(client):
     submitting a chart built on it."""
     response = client.get("/timezone", params={**BERLIN_1985, "utc_offset": "-4:00"})
     assert response.status_code == 400
+
+
+def test_a_zone_from_the_wrong_place_is_refused_in_plain_words(client):
+    """The form shows whatever comes back, so it cannot be the library's own
+    wording - that names arguments and quotes solar-gap limits."""
+    response = client.get(
+        "/timezone", params={**BERLIN_1985, "timezone": "America/New_York"}
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "That time zone does not match the birth place. "
+        "Check the place and the time zone."
+    )
 
 
 def test_timezone_refuses_a_zone_and_an_offset_together(client):

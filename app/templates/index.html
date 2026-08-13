@@ -323,9 +323,9 @@
                            name="utc_offset"
                            :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
                     <!-- The zone settled by /timezone, submitted back unchanged.
-                         Empty until a lookup succeeds. Nothing reads it on
-                         submit yet: binding it to the calculation is the next
-                         step, and until then the library still derives its own. -->
+                         Empty until a lookup succeeds, and an empty one is
+                         refused on submit: the calculation takes its zone from
+                         here and never works one out for itself. -->
                     <input type="hidden" name="resolved_timezone" :value="resolvedTimezone">
                   </div>
                 </div>
@@ -699,11 +699,14 @@
         invalidateTimezone() {
           this.resolvedTimezone = '';
           this.timezoneNotes = [];
+          // Any reply still on its way was asked for before this edit, so it
+          // no longer describes what the form says. Move the id past it.
+          this.timezoneRequestId += 1;
         },
 
         async fetchTimezone() {
           this.invalidateTimezone();
-          const requestId = ++this.timezoneRequestId;
+          const requestId = this.timezoneRequestId;
           // The birth date decides which time zone applied, and the birth time
           // decides how it reads, so neither can be left out.
           const birthDate = this.$refs.birthDate?.value;
@@ -733,7 +736,15 @@
             const response = await fetch(`/timezone?${params}`);
             if (requestId !== this.timezoneRequestId) return;  // superseded
             if (!response.ok) {
+              // A refusal carries a message written for the person filling the
+              // form. Show it where the notes go. Without it the page looks
+              // like nothing happened, and the refusal surfaces only after
+              // Calculate, as an error about details that never changed.
               const detail = await response.json().catch(() => null);
+              if (requestId !== this.timezoneRequestId) return;  // superseded
+              if (detail && detail.detail) {
+                this.timezoneNotes = [{ message: detail.detail, kind: 'caution' }];
+              }
               console.warn('Time zone lookup rejected:', response.status, detail);
               return;
             }

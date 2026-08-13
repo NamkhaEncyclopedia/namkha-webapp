@@ -3,9 +3,12 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfoNotFoundError
 
 import namkha_calculator as nc
+from namkha_calculator.localization import is_ambiguous_local_time
+
+from app.resolved_timezone import FIELD_NAME as RESOLVED_TIMEZONE_FIELD
+from app.resolved_timezone import ResolvedTimezoneParseError, parse_resolved_timezone
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,14 @@ MAX_UTC_OFFSET = timedelta(hours=16)
 # The summer-time select. Blank is a viable answer: the user is not sure.
 ON_SUMMER_TIME_VALUES = {"": None, "true": True, "false": False}
 
+# Shown whenever the settled time zone is missing, unreadable, or was worked out
+# for something other than what was submitted. All three mean the same thing to
+# the user: the answer on the page no longer belongs to these birth details.
+RESOLVE_AGAIN_MESSAGE = (
+    "Your birth details changed after the time zone was worked out. "
+    "Please re-check the birth place and date and submit again."
+)
+
 
 def parse_utc_offset(text: str) -> timedelta:
     """A "+-HH:MM" style offset as a timedelta."""
@@ -101,24 +112,6 @@ def build_request(form) -> NamkhaRequest:
     except KeyError as exc:
         raise ValueError("Select a gender.") from exc
 
-    # Three time-zone modes: manual UTC offset, zone from the list, or empty ->
-    # None, the library derives the zone from the birth place and date.
-    timezone_name = (form.get("timezone") or "").strip()
-    utc_offset_text = (form.get("utc_offset") or "").strip()
-    if utc_offset_text:
-        birth_timezone = nc.fixed_offset(parse_utc_offset(utc_offset_text))
-    elif timezone_name:
-        try:
-            birth_timezone = nc.zone(timezone_name)
-        except ZoneInfoNotFoundError as exc:
-            raise ValueError("Select a valid birth time zone.") from exc
-    else:
-        birth_timezone = None
-
-    # Tri-state for a birth time in the repeated fall-back hour: unset means the
-    # library guesses and notes it, yes/no pin the reading.
-    on_summer_time = parse_on_summer_time(form.get("on_summer_time") or "")
-
     try:
         latitude = float(form["latitude"])
         longitude = float(form["longitude"])
@@ -151,26 +144,76 @@ def build_request(form) -> NamkhaRequest:
     except KeyError as exc:
         raise ValueError("Select a valid calculation method.") from exc
 
+    resolved_timezone = _settled_timezone(form, birth_datetime)
+
     try:
         subject = nc.Subject(
             name=name,
             gender=gender,
             birth_datetime=birth_datetime,
-            birth_timezone=birth_timezone,
-            on_summer_time=on_summer_time,
             birth_location=birth_location,
+            resolved_timezone=resolved_timezone,
         )
+    except nc.StaleTimezoneError as exc:
+        # Subject compares the value against the birth details it is given, so
+        # this is where a place or date that moved on gets caught.
+        raise ValueError(RESOLVE_AGAIN_MESSAGE) from exc
     except TypeError as exc:
         raise ValueError("Enter a valid birth date, time, and time zone.") from exc
-    except ValueError as exc:
-        if "outside the real-timezone range" in str(exc):
-            raise ValueError("UTC offset must be between -16:00 and +16:00.") from exc
-        if "longitude" in str(exc):
-            raise ValueError(
-                "The selected time zone does not match the birth location. "
-                "Check the place and the time zone."
-            ) from exc
-        raise ValueError(
-            "Could not use this birth date, time, and place; check the values."
-        ) from exc
     return NamkhaRequest(subject=subject, namkha_type=namkha_type, method=method)
+
+
+def _settled_timezone(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
+    """A zone the /timezone route worked out, read back from its field."""
+    field_value = (form.get(RESOLVED_TIMEZONE_FIELD) or "").strip()
+    if not field_value:
+        raise ValueError(RESOLVE_AGAIN_MESSAGE)
+    try:
+        resolved_timezone = parse_resolved_timezone(field_value)
+    except ResolvedTimezoneParseError as exc:
+        raise ValueError(RESOLVE_AGAIN_MESSAGE) from exc
+
+    # assert_binds covers the place and the date. The next two are what it
+    # cannot see, so they are compared here or nowhere.
+    if not _zone_choice_matches(form, resolved_timezone):
+        raise ValueError(RESOLVE_AGAIN_MESSAGE)
+
+    # resolved_timezone stores the birth date, not the time of day, so it cannot
+    # tell whether this summer-time answer still fits. Compare it here instead,
+    # and only when the clock really repeats this hour: derive_timezone stores
+    # None for any other birth time, so a "Yes" would read as a mismatch.
+    posted = parse_on_summer_time(form.get("on_summer_time") or "")
+    if posted != resolved_timezone.on_summer_time and is_ambiguous_local_time(
+        birth_datetime, resolved_timezone.tzinfo
+    ):
+        raise ValueError(RESOLVE_AGAIN_MESSAGE)
+    return resolved_timezone
+
+
+def _zone_choice_matches(form, resolved_timezone: nc.ResolvedTimezone) -> bool:
+    """Whether the zone or offset on the form is the one that was settled.
+
+    The form keeps sending what the user picked, so the two can disagree. A
+    value settled for one zone, submitted next to a different chosen zone,
+    would print a sheet for neither. Which field should hold the answer follows
+    from where the settled value came from.
+    """
+    posted_zone = (form.get("timezone") or "").strip()
+    posted_offset = (form.get("utc_offset") or "").strip()
+
+    if resolved_timezone.provenance is nc.TimezoneProvenance.USER_ZONE:
+        return not posted_offset and posted_zone == resolved_timezone.key
+
+    if resolved_timezone.provenance is nc.TimezoneProvenance.USER_OFFSET:
+        if posted_zone or not posted_offset:
+            return False
+        try:
+            offset = parse_utc_offset(posted_offset)
+        except ValueError:
+            # Unreadable, so it cannot be the offset that was settled.
+            return False
+        return round(offset.total_seconds()) == resolved_timezone.offset_seconds
+
+    # Worked out from the birth place, which happens only when the user named
+    # no zone and no offset.
+    return not posted_zone and not posted_offset
