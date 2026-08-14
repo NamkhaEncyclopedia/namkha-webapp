@@ -537,7 +537,7 @@ def test_the_form_and_the_sheet_word_a_note_the_same_way(client):
     assert body["notes"] == from_sheet
 
 
-def test_a_settled_zone_carries_no_notes(client):
+def test_a_resolved_zone_carries_no_notes(client):
     assert client.get("/timezone", params=BERLIN_1985).json()["notes"] == []
 
 

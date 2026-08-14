@@ -322,7 +322,7 @@
                     <input type="hidden"
                            name="utc_offset"
                            :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
-                    <!-- The zone settled by /timezone, submitted back unchanged.
+                    <!-- The zone resolved by /timezone, submitted back unchanged.
                          Empty until a lookup succeeds, and an empty one is
                          refused on submit: the calculation takes its zone from
                          here and never works one out for itself. -->
@@ -570,7 +570,7 @@
         timezoneMode: 'auto',
         detectedTimezone: '',
         // Written only by a /timezone reply, cleared by any edit that could
-        // change it. Empty means "not settled yet", never "unchanged".
+        // change it. Empty means "not resolved yet", never "unchanged".
         resolvedTimezone: '',
         timezoneNotes: [],
         // Counts lookups so a slow reply cannot overwrite a newer one. A
@@ -693,7 +693,7 @@
           }
         },
 
-        // Forget a settled time zone, as soon as any input behind it is touched.
+        // Forget a resolved time zone, as soon as any input behind it is touched.
         // A stale value would print a sheet for the wrong zone. An empty one is
         // refused on submit instead.
         invalidateTimezone() {
@@ -728,7 +728,7 @@
             utc_offset: chosenOffset,
             on_summer_time: this.timezoneMode === 'offset' ? '' : this.onSummerTime,
           });
-          // Both failure exits below leave the settled zone empty. That is the
+          // Both failure exits below leave the resolved zone empty. That is the
           // safe outcome: no zone at all, rather than one that does not fit the
           // entered details. Both log, so a lookup that quietly stops working
           // can be traced.
@@ -863,7 +863,7 @@
           this.$refs.name.value = data.name || '';
           this.$refs.birthDate.value = data.birth_date;
           this.$refs.birthTime.value = data.birth_time;
-          // Fixtures carry no settled zone: it would be stale the moment the
+          // Fixtures carry no resolved zone: it would be stale the moment the
           // file was written. Ask for one now, as the form is complete.
           this.fetchTimezone();
         },

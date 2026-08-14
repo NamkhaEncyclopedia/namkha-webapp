@@ -53,11 +53,11 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     suggestion = page.locator(".place-suggestion").first
     expect(suggestion).to_be_visible()
     suggestion.click()
-    # selectPlace fills lat/lon (4 dp); fetchTimezone settles the zone.
+    # selectPlace fills lat/lon (4 dp); fetchTimezone resolves the zone.
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
-    # The settled zone rides along in its own field, ready to submit back.
+    # The resolved zone rides along in its own field, ready to submit back.
     expect(page.locator("input[name='resolved_timezone']")).to_have_value(
         re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
     )
@@ -68,8 +68,8 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     expect(page.locator("input[name='location_name']")).to_have_value("Berlin, Germany")
 
 
-def test_editing_a_birth_detail_drops_the_settled_timezone(page, live_server):
-    """A settled zone belongs to the details it was worked out for. Editing one
+def test_editing_a_birth_detail_drops_the_resolved_timezone(page, live_server):
+    """A resolved zone belongs to the details it was worked out for. Editing one
     must clear it, so a stale zone can never reach the calculation."""
     page.goto(live_server)
     page.get_by_text("Manually set coordinates").click()

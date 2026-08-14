@@ -1,6 +1,6 @@
 """Carrying a ResolvedTimezone through the form.
 
-The time zone is settled once, while the user is entering birth details, and
+The time zone is resolved once, while the user is entering birth details, and
 has to survive the trip back to /calculate and again to /download.pdf. It
 travels as one hidden field holding the text below, so both submit paths carry
 the same answer.

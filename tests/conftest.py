@@ -63,11 +63,11 @@ def fixture_form():
     def load(name, **overrides):
         data = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
         data.update(overrides)
-        # Every real submit carries a settled time zone, so a fixture form needs
+        # Every real submit carries a resolved time zone, so a fixture form needs
         # one too, and it has to match the data above. Subject refuses a value
-        # settled for a different place or date. Storing it in the JSON would go
+        # worked out for a different place or date. Storing it in the JSON would go
         # stale, and the test-mode picker reads those same files in a browser
-        # that settles the zone itself.
+        # that resolves the zone itself.
         data[RESOLVED_TIMEZONE_FIELD] = support.resolved_timezone_field(data)
         session_token = main._issue_session_token("testclient")
         main._mark_session_verified(session_token)
@@ -151,7 +151,7 @@ def _make_request(
         birth_location=nc.Location(
             latitude=latitude, longitude=longitude, name=location_name
         ),
-        resolved_timezone=support.resolve_timezone(
+        resolved_timezone=support.resolve_timezone_at(
             latitude, longitude, birth_datetime, timezone
         ),
     )
@@ -211,11 +211,11 @@ def _reset_timezone_state():
     """The /timezone limiter keeps process-global state; reset it around every test
     so request counts and cached lookups don't leak between tests."""
     main._timezone_hits.clear()
-    main._cached_derive_timezone.cache_clear()
+    main._cached_resolve_timezone.cache_clear()
     main._last_sweep.clear()  # shared by both limiter stores
     yield
     main._timezone_hits.clear()
-    main._cached_derive_timezone.cache_clear()
+    main._cached_resolve_timezone.cache_clear()
     main._last_sweep.clear()
 
 

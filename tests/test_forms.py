@@ -34,14 +34,14 @@ _BASE_FORM = {
 }
 
 
-# The settled time zone for the baseline form. Tests whose form cannot be
+# The resolved time zone for the baseline form. Tests whose form cannot be
 # resolved at all, such as a birth date of "not-a-date" with no time zone to
 # find, pass this so they reach the parse error they are actually about.
-_BASE_SETTLED = resolved_timezone_field(_BASE_FORM)
+_BASE_RESOLVED = resolved_timezone_field(_BASE_FORM)
 
 
 def _good_form(**overrides):
-    """A form as the page submits one, including the settled time zone.
+    """A form as the page submits one, including the resolved time zone.
 
     The hidden field is worked out from whatever the form ends up saying, so a
     test overriding the date or the coordinates still gets a value that fits it.
@@ -116,13 +116,13 @@ def test_absent_or_blank_location_name_is_none(overrides):
     assert request.subject.birth_location.name is None
 
 
-def test_the_settled_timezone_is_used_as_submitted():
+def test_the_resolved_timezone_is_used_as_submitted():
     request = build_request(_good_form())
     assert request.subject.resolved_timezone.key == "Asia/Kathmandu"
 
 
 @pytest.mark.parametrize("field_value", ["", "   ", None])
-def test_a_form_without_a_settled_timezone_is_refused(field_value):
+def test_a_form_without_a_resolved_timezone_is_refused(field_value):
     """Nothing is missing by accident: the page always sends one. Filling the
     gap here would hide a broken form, and the zone we picked could differ from
     the one the user was shown."""
@@ -144,7 +144,7 @@ def test_a_form_without_a_settled_timezone_is_refused(field_value):
         "v0|USER_ZONE|Asia/Kathmandu||CERTAIN|0|_|27.7|85.32|1990-07-22||1582-10-15",
     ],
 )
-def test_an_unreadable_settled_timezone_is_refused(field_value):
+def test_an_unreadable_resolved_timezone_is_refused(field_value):
     with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
         build_request(_good_form(**{RESOLVED_TIMEZONE_FIELD: field_value}))
 
@@ -152,7 +152,7 @@ def test_an_unreadable_settled_timezone_is_refused(field_value):
 # Real values with one component swapped for an impossible one, rather than
 # hand-written lines: the field order belongs to app/resolved_timezone.py and
 # restating it here would rot the moment it changes.
-_UNKNOWN_ZONE_KEY = _BASE_SETTLED.replace("Asia/Kathmandu", "Mars/Phobos", 1)
+_UNKNOWN_ZONE_KEY = _BASE_RESOLVED.replace("Asia/Kathmandu", "Mars/Phobos", 1)
 _ABSURD_OFFSET = resolved_timezone_field(
     dict(_BASE_FORM, timezone="", utc_offset="+5:45")
 ).replace("|20700|", "|100000|", 1)
@@ -181,7 +181,7 @@ def test_a_timezone_that_cannot_be_rebuilt_is_refused(field_value):
         {"longitude": "2.35"},
     ],
 )
-def test_details_moving_after_the_timezone_was_settled_are_refused(moved):
+def test_details_moving_after_the_timezone_was_resolved_are_refused(moved):
     """Working the zone out again here would be slow and might contradict what
     the page already showed. Going ahead with the old one would print a sheet
     for a place or date the user has left behind. Refusing is what is left."""
@@ -192,7 +192,7 @@ def test_details_moving_after_the_timezone_was_settled_are_refused(moved):
 
 
 def test_the_birth_time_may_move_without_resolving_again():
-    """`kept` is the resolved_timezone settled for birth_time 08:15. `form`
+    """`kept` is the resolved_timezone worked out for birth_time 08:15. `form`
     submits birth_time 09:40 with the same `kept` value. assert_binds compares
     only the date and the place, not the time, so build_request does not
     raise. The assert then checks that birth_datetime uses the new time."""
@@ -202,7 +202,7 @@ def test_the_birth_time_may_move_without_resolving_again():
 
 
 def test_a_birth_on_a_fixed_offset_keeps_the_offset():
-    """Offset mode is a whole branch of the form: it settles a bare offset
+    """Offset mode is a whole branch of the form: it resolves a bare offset
     rather than a named zone, and no zone key survives it."""
     request = build_request(_good_form(timezone="", utc_offset="+5:45"))
     assert request.subject.resolved_timezone.key is None
@@ -211,8 +211,8 @@ def test_a_birth_on_a_fixed_offset_keeps_the_offset():
 
 class TestTheZoneChoiceMustMatch:
     """The form goes on sending the zone the user picked, next to the value
-    settled for it. Nothing else compares the two: assert_binds looks at the
-    place and the date, so a settled Kathmandu submitted beside a chosen Tokyo
+    worked out for it. Nothing else compares the two: assert_binds looks at the
+    place and the date, so a resolved Kathmandu submitted beside a chosen Tokyo
     would sail through and print a sheet for Kathmandu.
 
     There are three ways to choose, so three rules. A zone picked from the list
@@ -220,46 +220,46 @@ class TestTheZoneChoiceMustMatch:
     `utc_offset`. A zone that came from the birth place must leave both empty.
     """
 
-    def _keeping_the_settled_value(self, settled_with, **posted):
-        """Settle a zone one way, then submit it with something else posted."""
-        settled = _good_form(**settled_with)[RESOLVED_TIMEZONE_FIELD]
-        return _good_form(**posted, **{RESOLVED_TIMEZONE_FIELD: settled})
+    def _keeping_the_resolved_value(self, resolved_with, **posted):
+        """Resolve a zone one way, then submit it with something else posted."""
+        resolved = _good_form(**resolved_with)[RESOLVED_TIMEZONE_FIELD]
+        return _good_form(**posted, **{RESOLVED_TIMEZONE_FIELD: resolved})
 
     def test_a_different_chosen_zone_is_refused(self):
-        form = self._keeping_the_settled_value(
+        form = self._keeping_the_resolved_value(
             {"timezone": "Asia/Kathmandu"}, timezone="Asia/Thimphu"
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_a_different_offset_is_refused(self):
-        form = self._keeping_the_settled_value(
+        form = self._keeping_the_resolved_value(
             {"timezone": "", "utc_offset": "+5:45"}, timezone="", utc_offset="+5:30"
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_switching_to_the_other_mode_is_refused(self):
-        """A zone was settled, but the form now offers an offset instead."""
-        form = self._keeping_the_settled_value(
+        """A zone was resolved, but the form now offers an offset instead."""
+        form = self._keeping_the_resolved_value(
             {"timezone": "Asia/Kathmandu"}, timezone="", utc_offset="+5:45"
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_naming_a_zone_against_a_derived_value_is_refused(self):
-        """The settled value came from the birth place, with no zone picked.
+        """The resolved value came from the birth place, with no zone picked.
         The form now sends one, so the two disagree about what was chosen."""
-        form = self._keeping_the_settled_value(
+        form = self._keeping_the_resolved_value(
             {"timezone": ""}, timezone="Asia/Kathmandu"
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_dropping_a_chosen_zone_is_refused(self):
-        """The settled value came from a zone the user picked. The form now
+        """The resolved value came from a zone the user picked. The form now
         sends none, so the two disagree about what was chosen."""
-        form = self._keeping_the_settled_value(
+        form = self._keeping_the_resolved_value(
             {"timezone": "Asia/Kathmandu"}, timezone=""
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
@@ -285,7 +285,7 @@ class TestTheZoneChoiceMustMatch:
 
 
 class TestSummerTimeAnswerMatches:
-    """The settled value records the birth date, not the time of day, so it
+    """The resolved value records the birth date, not the time of day, so it
     cannot police the summer-time answer itself. build_request does.
 
     Berlin 1985-09-29 02:30 falls in a repeated hour; noon that day does not.
@@ -300,43 +300,43 @@ class TestSummerTimeAnswerMatches:
     REPEATED = FALL_BACK_DAY | {"birth_time": "02:30"}
     ORDINARY = FALL_BACK_DAY | {"birth_time": "12:00"}
 
-    def test_the_answer_given_when_it_was_settled_is_accepted(self):
+    def test_the_answer_given_when_it_was_resolved_is_accepted(self):
         request = build_request(_good_form(**self.REPEATED, on_summer_time="true"))
         assert request.subject.resolved_timezone.on_summer_time is True
 
     def test_a_different_answer_is_refused(self):
-        settled = _good_form(**self.REPEATED, on_summer_time="true")
+        resolved = _good_form(**self.REPEATED, on_summer_time="true")
         form = _good_form(
             **self.REPEATED,
             on_summer_time="false",
-            **{RESOLVED_TIMEZONE_FIELD: settled[RESOLVED_TIMEZONE_FIELD]},
+            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_dropping_the_answer_is_refused(self):
-        settled = _good_form(**self.REPEATED, on_summer_time="true")
+        resolved = _good_form(**self.REPEATED, on_summer_time="true")
         form = _good_form(
             **self.REPEATED,
             on_summer_time="",
-            **{RESOLVED_TIMEZONE_FIELD: settled[RESOLVED_TIMEZONE_FIELD]},
+            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_adding_an_answer_is_refused(self):
-        settled = _good_form(**self.REPEATED, on_summer_time="")
+        resolved = _good_form(**self.REPEATED, on_summer_time="")
         form = _good_form(
             **self.REPEATED,
             on_summer_time="true",
-            **{RESOLVED_TIMEZONE_FIELD: settled[RESOLVED_TIMEZONE_FIELD]},
+            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
 
     def test_an_answer_to_an_ordinary_hour_is_not_a_mismatch(self):
-        """Nothing repeats at noon, so derive_timezone drops the answer and the
-        settled value records none. Refusing that would reject a form anyone
+        """Nothing repeats at noon, so resolve_timezone drops the answer and the
+        resolved value records none. Refusing that would reject a form anyone
         can produce by picking Yes for an ordinary birth."""
         request = build_request(_good_form(**self.ORDINARY, on_summer_time="true"))
         assert request.subject.resolved_timezone.on_summer_time is None
@@ -364,6 +364,6 @@ class TestSummerTimeAnswerMatches:
 def test_bad_input_raises_user_message(overrides, message):
     # These forms cannot be resolved, so they carry the baseline value. Every
     # message below comes from a parse that runs before the time zone is read.
-    form = _good_form(**overrides, **{RESOLVED_TIMEZONE_FIELD: _BASE_SETTLED})
+    form = _good_form(**overrides, **{RESOLVED_TIMEZONE_FIELD: _BASE_RESOLVED})
     with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
         build_request(form)

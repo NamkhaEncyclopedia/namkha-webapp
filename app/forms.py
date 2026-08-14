@@ -60,7 +60,7 @@ MAX_UTC_OFFSET = timedelta(hours=16)
 # The summer-time select. Blank is a viable answer: the user is not sure.
 ON_SUMMER_TIME_VALUES = {"": None, "true": True, "false": False}
 
-# Shown whenever the settled time zone is missing, unreadable, or was worked out
+# Shown whenever the resolved time zone is missing, unreadable, or was worked out
 # for something other than what was submitted. All three mean the same thing to
 # the user: the answer on the page no longer belongs to these birth details.
 RESOLVE_AGAIN_MESSAGE = (
@@ -144,7 +144,7 @@ def build_request(form) -> NamkhaRequest:
     except KeyError as exc:
         raise ValueError("Select a valid calculation method.") from exc
 
-    resolved_timezone = _settled_timezone(form, birth_datetime)
+    resolved_timezone = _timezone_from_form(form, birth_datetime)
 
     try:
         subject = nc.Subject(
@@ -163,7 +163,7 @@ def build_request(form) -> NamkhaRequest:
     return NamkhaRequest(subject=subject, namkha_type=namkha_type, method=method)
 
 
-def _settled_timezone(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
+def _timezone_from_form(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
     """A zone the /timezone route worked out, read back from its field."""
     field_value = (form.get(RESOLVED_TIMEZONE_FIELD) or "").strip()
     if not field_value:
@@ -180,7 +180,7 @@ def _settled_timezone(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
 
     # resolved_timezone stores the birth date, not the time of day, so it cannot
     # tell whether this summer-time answer still fits. Compare it here instead,
-    # and only when the clock really repeats this hour: derive_timezone stores
+    # and only when the clock really repeats this hour: resolve_timezone stores
     # None for any other birth time, so a "Yes" would read as a mismatch.
     posted = parse_on_summer_time(form.get("on_summer_time") or "")
     if posted != resolved_timezone.on_summer_time and is_ambiguous_local_time(
@@ -191,12 +191,12 @@ def _settled_timezone(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
 
 
 def _zone_choice_matches(form, resolved_timezone: nc.ResolvedTimezone) -> bool:
-    """Whether the zone or offset on the form is the one that was settled.
+    """Whether the zone or offset on the form is the one that was resolved.
 
     The form keeps sending what the user picked, so the two can disagree. A
-    value settled for one zone, submitted next to a different chosen zone,
+    value that resolved to one zone, submitted next to a different chosen zone,
     would print a sheet for neither. Which field should hold the answer follows
-    from where the settled value came from.
+    from where the resolved value came from.
     """
     posted_zone = (form.get("timezone") or "").strip()
     posted_offset = (form.get("utc_offset") or "").strip()
@@ -210,7 +210,7 @@ def _zone_choice_matches(form, resolved_timezone: nc.ResolvedTimezone) -> bool:
         try:
             offset = parse_utc_offset(posted_offset)
         except ValueError:
-            # Unreadable, so it cannot be the offset that was settled.
+            # Unreadable, so it cannot be the offset that was resolved.
             return False
         return round(offset.total_seconds()) == resolved_timezone.offset_seconds
 

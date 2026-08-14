@@ -1,10 +1,10 @@
-"""The hidden field that carries a settled time zone through the form."""
+"""The hidden field that carries a resolved time zone through the form."""
 
 import datetime as dt
 
 import namkha_calculator as nc
 import pytest
-from namkha_calculator.zone_derivation import derive_timezone
+from namkha_calculator.zone_derivation import resolve_timezone
 
 from app.resolved_timezone import (
     ResolvedTimezoneParseError,
@@ -26,21 +26,21 @@ def _round_trip(resolved: nc.ResolvedTimezone) -> nc.ResolvedTimezone:
     "resolved",
     [
         # A modern birth: a named zone, certain.
-        derive_timezone(BERLIN, dt.datetime(1985, 6, 15, 12)),
+        resolve_timezone(BERLIN, dt.datetime(1985, 6, 15, 12)),
         # A historical one, where the zone and the modern zone differ.
-        derive_timezone(LVIV, dt.datetime(1940, 6, 15, 12)),
+        resolve_timezone(LVIV, dt.datetime(1940, 6, 15, 12)),
         # Open water, where the offset came from longitude.
-        derive_timezone(PACIFIC, dt.datetime(1900, 1, 1, 12)),
+        resolve_timezone(PACIFIC, dt.datetime(1900, 1, 1, 12)),
         # A zone the user chose.
-        derive_timezone(
+        resolve_timezone(
             KATHMANDU, dt.datetime(1985, 6, 15, 12), zone_key="Asia/Kathmandu"
         ),
         # An offset the user provided, with each possible answer about summer time.
-        derive_timezone(
+        resolve_timezone(
             KATHMANDU, dt.datetime(1985, 6, 15, 12), offset=dt.timedelta(minutes=345)
         ),
-        derive_timezone(BERLIN, dt.datetime(1985, 6, 15, 12), on_summer_time=True),
-        derive_timezone(BERLIN, dt.datetime(1985, 6, 15, 12), on_summer_time=False),
+        resolve_timezone(BERLIN, dt.datetime(1985, 6, 15, 12), on_summer_time=True),
+        resolve_timezone(BERLIN, dt.datetime(1985, 6, 15, 12), on_summer_time=False),
     ],
 )
 def test_survives_the_round_trip(resolved):
@@ -48,14 +48,14 @@ def test_survives_the_round_trip(resolved):
 
 
 def test_the_rebuilt_timezone_still_matches():
-    resolved = derive_timezone(PACIFIC, dt.datetime(1900, 1, 1, 12))
+    resolved = resolve_timezone(PACIFIC, dt.datetime(1900, 1, 1, 12))
     assert _round_trip(resolved).tzinfo.utcoffset(None) == resolved.tzinfo.utcoffset(
         None
     )
 
 
 def test_a_serialized_value_is_readable():
-    resolved = derive_timezone(LVIV, dt.datetime(1940, 6, 15, 12))
+    resolved = resolve_timezone(LVIV, dt.datetime(1940, 6, 15, 12))
     text = serialize_resolved_timezone(resolved)
     assert text.startswith("v1|LOCATION_DERIVED|Europe/Warsaw||BORDERS_UNCERTAIN|")
     assert text.endswith("|1940-06-15|Europe/Kyiv|1918-02-14")

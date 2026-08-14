@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from namkha_calculator.zone_derivation import derive_timezone
+from namkha_calculator.zone_derivation import resolve_timezone
 from starlette.concurrency import run_in_threadpool
 
 from app import constants, turnstile
@@ -88,7 +88,7 @@ _last_sweep: dict[int, float] = {}
 
 
 @lru_cache(maxsize=4096)
-def _cached_derive_timezone(
+def _cached_resolve_timezone(
     latitude: float,
     longitude: float,
     birth_datetime: datetime,
@@ -107,7 +107,7 @@ def _cached_derive_timezone(
     Nothing here catches errors. A time zone that cannot be worked out has to
     reach the user.
     """
-    return derive_timezone(
+    return resolve_timezone(
         nc.Location(latitude=latitude, longitude=longitude),
         birth_datetime,
         zone_key=zone_key,
@@ -660,7 +660,7 @@ async def timezone_lookup(
     utc_offset: str = Query(default=""),
     on_summer_time: str = Query(default=""),
 ):
-    """Settle the birth time zone, which the form then submits back unchanged.
+    """Resolve the birth time zone, which the form then submits back unchanged.
 
     This is the only place a time zone is worked out. The answer carries how
     sure it is, so the user sees any doubt before committing to a chart rather
@@ -688,7 +688,7 @@ async def timezone_lookup(
     try:
         # CPU-bound; offload so it doesn't block the event loop.
         resolved = await run_in_threadpool(
-            _cached_derive_timezone,
+            _cached_resolve_timezone,
             latitude,
             longitude,
             birth_datetime,
@@ -714,7 +714,7 @@ async def timezone_lookup(
             detail="Could not work out the time zone for this birth.",
         ) from error
 
-    # input_notes below is deliberately outside _cached_derive_timezone: next to
+    # input_notes below is deliberately outside _cached_resolve_timezone: next to
     # the polygon search it costs nothing, and keeping it out leaves that cache
     # holding only the expensive part.
     return {
