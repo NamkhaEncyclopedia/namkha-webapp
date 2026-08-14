@@ -138,12 +138,15 @@ def _make_request(
     name="Test Person",
     birth_datetime=datetime(1985, 3, 15, 14, 30),
     timezone="Europe/Berlin",
+    offset=None,
     latitude=52.52,
     longitude=13.40,
     location_name=None,
     namkha_type=nc.NamkhaType.YEAR,
     method=nc.CalculationMethod.CLASSIC,
 ):
+    """timezone and offset are the two ways a user names a zone; pass neither
+    (timezone=None) to have it worked out from the place and date."""
     subject = nc.Subject(
         name=name,
         gender=gender,
@@ -152,7 +155,7 @@ def _make_request(
             latitude=latitude, longitude=longitude, name=location_name
         ),
         resolved_timezone=support.resolve_timezone_at(
-            latitude, longitude, birth_datetime, timezone
+            latitude, longitude, birth_datetime, timezone, offset=offset
         ),
     )
     return NamkhaRequest(subject=subject, namkha_type=namkha_type, method=method)

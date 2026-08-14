@@ -332,7 +332,7 @@
                 <template x-if="timezoneMode === 'auto'">
                   <p class="timezone-detected"
                      role="status"
-                     x-text="detectedTimezone ? 'Detected: ' + detectedTimezone : 'Determined from the birth place and date.'">
+                     x-text="timezoneLabel ? 'Detected: ' + timezoneLabel : 'Determined from the birth place and date.'">
                   </p>
                 </template>
                 <template x-if="timezoneMode === 'list'">
@@ -568,7 +568,12 @@
         latitude: '',
         longitude: '',
         timezoneMode: 'auto',
+        // The zone key, used to prefill the picker when the user switches to it.
         detectedTimezone: '',
+        // What the sheet will call this time zone. Differs from the key for a
+        // birth on sun-based local time, and there is a name even when the key
+        // is empty, so the status line reads this one.
+        timezoneLabel: '',
         // Written only by a /timezone reply, cleared by any edit that could
         // change it. Empty means "not resolved yet", never "unchanged".
         resolvedTimezone: '',
@@ -753,6 +758,7 @@
             this.resolvedTimezone = data.resolved_timezone;
             this.timezoneNotes = data.notes;
             this.detectedTimezone = data.timezone || '';
+            this.timezoneLabel = data.label || '';
           } catch (error) {
             console.warn('Time zone lookup failed:', error);
           }

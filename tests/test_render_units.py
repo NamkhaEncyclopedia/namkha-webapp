@@ -3,6 +3,8 @@
 Colors are compared against `app.constants`.
 """
 
+from datetime import datetime, timedelta
+
 import namkha_calculator as nc
 import pytest
 from lxml import etree
@@ -11,6 +13,7 @@ from app import constants
 from app.calculation_render import (
     SVG_NS,
     _band_colors,
+    _build_data,
     _diamond_geometry,
     _element_color,
     _fill_bands,
@@ -243,6 +246,73 @@ def test_utc_offset_negative(make_request):
         timezone="America/New_York", latitude=40.71, longitude=-74.01
     ).subject
     assert _utc_offset(subject) == "UTC-5:00"
+
+
+# --- _build_data birth line: one case per shape a resolved time zone takes --------
+
+
+def _birth_line(make_request, make_result, **request_keywords):
+    request = make_request(**request_keywords)
+    data = _build_data(make_result(request=request))
+    return data["subject"]["birth"]
+
+
+def test_birth_line_names_a_civil_zone(make_request, make_result):
+    assert (
+        _birth_line(make_request, make_result, timezone="Europe/Berlin")
+        == "1985-03-15 14:30 UTC+1:00 (Europe/Berlin)"
+    )
+
+
+def test_birth_line_shows_a_plain_offset_alone(make_request, make_result):
+    # There is no zone name to pair the offset with, so the offset stands on its
+    # own. This is the case the old str(tzinfo) check picked out by its spelling.
+    assert (
+        _birth_line(
+            make_request,
+            make_result,
+            timezone=None,
+            offset=timedelta(hours=5, minutes=45),
+            latitude=27.7172,
+            longitude=85.3240,
+        )
+        == "1985-03-15 14:30 (UTC+5:45)"
+    )
+
+
+def test_birth_line_names_mean_solar_time_before_standard_time(
+    make_request, make_result
+):
+    # Arkhangelsk 1849 resolves to Europe/Moscow, but the calculation runs on the
+    # birth longitude's mean solar time. Naming the key here printed the offset
+    # of one zone beside the name of another.
+    assert (
+        _birth_line(
+            make_request,
+            make_result,
+            timezone=None,
+            birth_datetime=datetime(1849, 12, 15, 5, 0),
+            latitude=64.5401,
+            longitude=40.5433,
+        )
+        == "1849-12-15 05:00 UTC+2:42 (mean solar time)"
+    )
+
+
+def test_birth_line_names_mean_solar_time_in_open_water(make_request, make_result):
+    # A nautical Etc/GMT key inverts the sign of the offset printed beside it, so
+    # the key is never shown.
+    assert (
+        _birth_line(
+            make_request,
+            make_result,
+            timezone=None,
+            birth_datetime=datetime(1900, 1, 1, 12, 0),
+            latitude=0.0,
+            longitude=-150.0,
+        )
+        == "1900-01-01 12:00 UTC-10:00 (mean solar time)"
+    )
 
 
 # --- _sanitize_svg: defense-in-depth before embedding as raw HTML -----------------

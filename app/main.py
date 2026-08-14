@@ -720,6 +720,9 @@ async def timezone_lookup(
     return {
         "resolved_timezone": serialize_resolved_timezone(resolved),
         "timezone": resolved.key,
+        # What the sheet will name this time zone. Not always the key: a birth
+        # before standard time reached the place runs on sun-based local time.
+        "label": nc.timezone_label(resolved, birth_datetime),
         "derivation": resolved.derivation.name,
         "notes": notes_for_display(
             nc.input_notes(

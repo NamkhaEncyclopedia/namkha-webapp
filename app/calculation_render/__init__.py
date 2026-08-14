@@ -306,16 +306,13 @@ def _build_data(result) -> dict:
                 "conflicted": harmonized_aspect.is_conflicted,
             }
         )
-    zone_text = str(subject.effective_timezone)
-    if zone_text.startswith("UTC"):
-        # Fixed offset (e.g. "UTC+05:45"): already carries the offset, no
-        # separate zone name to pair it with.
-        birth_text = f"{subject.birth_datetime:%Y-%m-%d %H:%M} ({zone_text})"
-    else:
-        birth_text = (
-            f"{subject.birth_datetime:%Y-%m-%d %H:%M} "
-            f"{_utc_offset(subject)} ({zone_text})"
-        )
+    # No zone name means the user gave a plain offset, so the offset is the
+    # whole answer and stands on its own.
+    zone_label = nc.timezone_label(subject.resolved_timezone, subject.birth_datetime)
+    offset_text = _utc_offset(subject)
+    birth_text = f"{subject.birth_datetime:%Y-%m-%d %H:%M} " + (
+        f"{offset_text} ({zone_label})" if zone_label else f"({offset_text})"
+    )
     return {
         "subject": {
             "name": subject.name or "—",

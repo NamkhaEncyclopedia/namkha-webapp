@@ -475,6 +475,7 @@ def test_timezone_lookup_ok(client):
     assert response.status_code == 200
     body = response.json()
     assert body["timezone"] == "Europe/Berlin"
+    assert body["label"] == "Europe/Berlin"
     assert body["derivation"] == "CERTAIN"
     assert body["resolved_timezone"].startswith("v1|LOCATION_DERIVED|Europe/Berlin|")
 
@@ -504,7 +505,27 @@ def test_timezone_accepts_a_provided_offset(client):
     assert response.status_code == 200
     body = response.json()
     assert body["timezone"] is None
+    assert body["label"] is None
     assert body["resolved_timezone"].startswith("v1|USER_OFFSET||20700|")
+
+
+def test_timezone_label_differs_from_the_key_on_sun_based_local_time(client):
+    """Arkhangelsk in 1849 predates standard time in Russia, so the calculation
+    runs on the birth longitude's mean solar time. The form must say what the
+    sheet will say, not the zone key behind it."""
+    response = client.get(
+        "/timezone",
+        params={
+            "latitude": 64.5401,
+            "longitude": 40.5433,
+            "birth_date": "1849-12-15",
+            "birth_time": "05:00",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["timezone"] == "Europe/Moscow"
+    assert body["label"] == "mean solar time"
 
 
 def test_timezone_reports_what_the_entered_details_imply(client):
