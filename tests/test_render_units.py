@@ -265,8 +265,6 @@ def test_birth_line_names_a_civil_zone(make_request, make_result):
 
 
 def test_birth_line_shows_a_plain_offset_alone(make_request, make_result):
-    # There is no zone name to pair the offset with, so the offset stands on its
-    # own. This is the case the old str(tzinfo) check picked out by its spelling.
     assert (
         _birth_line(
             make_request,
@@ -284,8 +282,7 @@ def test_birth_line_names_mean_solar_time_before_standard_time(
     make_request, make_result
 ):
     # Arkhangelsk 1849 resolves to Europe/Moscow, but the calculation runs on the
-    # birth longitude's mean solar time. Naming the key here printed the offset
-    # of one zone beside the name of another.
+    # birth longitude's mean solar time.
     assert (
         _birth_line(
             make_request,
