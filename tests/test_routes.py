@@ -83,8 +83,9 @@ def test_calculate_escapes_name(client, fixture_form):
 # --- /download.pdf ----------------------------------------------------------------
 
 
-def test_download_pdf_happy(client, fixture_form):
-    response = client.post("/download.pdf", data=fixture_form("year_classic_berlin"))
+def test_download_pdf_happy(client, fixture_form, download_form):
+    payload = download_form(fixture_form("year_classic_berlin"))
+    response = client.post("/download.pdf", data=payload)
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content[:5] == b"%PDF-"
@@ -98,10 +99,35 @@ def test_download_pdf_happy(client, fixture_form):
     )
 
 
-def test_download_pdf_error_is_400(client, fixture_form):
-    response = client.post("/download.pdf", data=fixture_form("error_month_cnnr"))
+def test_download_pdf_reads_only_the_result_id(client, fixture_form, download_form):
+    """Birth details posted beside the id are ignored, so the PDF is always mirrors the
+    preview sheet that was shown. The filename carries the subject and birth date, which
+    is where a substituted input would surface."""
+    payload = download_form(fixture_form("year_classic_berlin"))
+    response = client.post(
+        "/download.pdf",
+        data={**payload, "name": "Someone Else", "birth_date": "1999-01-01"},
+    )
+    assert response.status_code == 200
+    assert (
+        'filename="namkha-Sample-Person-Year-Classic-1985-03-15.pdf"'
+        in response.headers["content-disposition"]
+    )
+
+
+def test_download_pdf_rejects_an_unknown_result_id(client, fixture_form, download_form):
+    payload = download_form(fixture_form("year_classic_berlin"))
+    payload["result_id"] = "not-a-real-id"
+    response = client.post("/download.pdf", data=payload)
     assert response.status_code == 400
-    assert "Switch the calculation method to Classic." in response.json()["detail"]
+    assert "expired" in response.json()["detail"]
+
+
+def test_download_pdf_rejects_a_forgotten_result(client, fixture_form, download_form):
+    """What a user meets after the handle is evicted or the server restarts."""
+    payload = download_form(fixture_form("year_classic_berlin"))
+    main._result_handles.clear()
+    assert client.post("/download.pdf", data=payload).status_code == 400
 
 
 # --- session token gate -------------------------------------------------------------
@@ -335,12 +361,14 @@ def test_download_pdf_rejects_an_unverified_session(client, fixture_form):
     assert response.status_code == 403
 
 
-def test_calculate_verifies_the_session_for_download(client, fixture_form):
+def test_calculate_verifies_the_session_for_download(
+    client, fixture_form, download_form
+):
     form = fixture_form("year_classic_berlin")
     form["session_token"] = main._issue_session_token("testclient")
+    # Nothing calculated yet, so the session is unverified and there is no id.
     assert client.post("/download.pdf", data=form).status_code == 403
-    assert client.post("/calculate", data=form).status_code == 200
-    assert client.post("/download.pdf", data=form).status_code == 200
+    assert client.post("/download.pdf", data=download_form(form)).status_code == 200
 
 
 def test_a_rejected_form_does_not_verify_the_session(client, fixture_form):
@@ -355,8 +383,10 @@ def test_a_rejected_form_does_not_verify_the_session(client, fixture_form):
 # --- calculate_namkha result cache --------------------------------------------------
 
 
-def test_download_pdf_reuses_calculate_result(client, fixture_form, monkeypatch):
-    """The typical flow hits /calculate then /download.pdf with the same form;
+def test_download_pdf_reuses_calculate_result(
+    client, fixture_form, download_form, monkeypatch
+):
+    """The typical flow calls /calculate then /download.pdf for the same result;
     the second call should skip recomputing calculate_namkha (skyfield), only
     redoing the Typst compile (different output format, can't be shared)."""
     calls = []
@@ -368,9 +398,8 @@ def test_download_pdf_reuses_calculate_result(client, fixture_form, monkeypatch)
 
     monkeypatch.setattr(main.nc, "calculate_namkha", counting_calculate)
 
-    form = fixture_form("year_classic_berlin")
-    assert client.post("/calculate", data=form).status_code == 200
-    assert client.post("/download.pdf", data=form).status_code == 200
+    payload = download_form(fixture_form("year_classic_berlin"))
+    assert client.post("/download.pdf", data=payload).status_code == 200
     assert len(calls) == 1
 
 

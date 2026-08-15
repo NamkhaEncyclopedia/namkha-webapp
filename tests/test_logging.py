@@ -103,6 +103,30 @@ def test_payload_carries_the_non_sensitive_inputs():
     assert payload["result"] is None
 
 
+def test_download_logs_the_inputs_that_produced_the_sheet(
+    client, fixture_form, download_form, caplog
+):
+    """/download.pdf reads no form, so its inputs come from the stored handle.
+    Without them the download's log line would be blank where /calculate's is
+    full, and the two could no longer be matched."""
+    form = fixture_form("year_classic_berlin")
+    form["name"] = _PLAINTEXT_NAME
+    payload = download_form(form)
+    with caplog.at_level(logging.INFO, logger="app.main"):
+        assert client.post("/download.pdf", data=payload).status_code == 200
+    payloads = []
+    for record in caplog.records:
+        try:
+            payloads.append(json.loads(record.getMessage()))
+        except ValueError:
+            continue  # only log_event writes JSON; other lines are plain text
+    logged = [payload for payload in payloads if payload["route"] == "/download.pdf"]
+    assert len(logged) == 1
+    assert logged[0]["inputs"]["birth_date"] == form["birth_date"]
+    assert logged[0]["inputs"]["latitude"] == form["latitude"]
+    assert logged[0]["name"] == hash_name(_PLAINTEXT_NAME)
+
+
 def test_summarize_result_is_astro_only(make_result):
     summary = summarize_result(make_result())
     assert set(summary) == {

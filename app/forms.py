@@ -21,7 +21,9 @@ class NamkhaRequest:
     method: nc.CalculationMethod
 
 
-# Field names shared by the form and the hidden inputs on the download button.
+# Every field /calculate reads from the form. build_request parses them, and the
+# event log records them. The download button carries none of them: it posts a
+# result_id, and the server looks the request up by it.
 FIELDS = (
     "name",
     "gender",
@@ -32,8 +34,6 @@ FIELDS = (
     "utc_offset",
     "on_summer_time",
     # The time zone the /timezone route worked out, submitted back unchanged.
-    # It has to be listed here: only the fields in this list are carried over
-    # to the Download PDF button, which re-submits the whole form.
     "resolved_timezone",
     "latitude",
     "longitude",

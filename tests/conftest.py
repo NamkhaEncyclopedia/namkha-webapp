@@ -7,6 +7,7 @@ Two input styles, matching the plan's layer split:
 """
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -229,6 +230,34 @@ def _reset_compile_rate_limit_state():
     main._compile_hits.clear()
     yield
     main._compile_hits.clear()
+
+
+@pytest.fixture
+def download_form(client):
+    """What the Download PDF button posts, obtained the way the page obtains it:
+    run /calculate and take the id it generated. The id cannot be built by hand, so
+    a test that wants a download has to produce a real result first."""
+
+    def build(form):
+        response = client.post("/calculate", data=form)
+        assert response.status_code == 200, response.text
+        match = re.search(r'name="result_id" value="([^"]+)"', response.text)
+        assert match is not None, "the /calculate response carried no result_id"
+        return {
+            "result_id": match.group(1),
+            "session_token": form.get("session_token", ""),
+        }
+
+    return build
+
+
+@pytest.fixture(autouse=True)
+def _reset_result_handles():
+    """Handles /calculate generates for /download.pdf are process-global;
+    a leak would let one test download another test's result."""
+    main._result_handles.clear()
+    yield
+    main._result_handles.clear()
 
 
 @pytest.fixture(autouse=True)

@@ -226,11 +226,11 @@ async def _compile_slot(route: str):
 
 # Lightweight gate against scripts that hit /calculate or /download.pdf directly,
 # skipping the form entirely. GET / mints a token bound to the issuing client's IP;
-# the form carries it as a hidden field, and _result.html's form.items() echo
-# carries it on into the download form too, so one token covers both submissions
-# from a page load. The routes reject requests with no token, a token this process
-# never issued, or a token replayed from a different client. This is on top of,
-# not instead of, the per-client compile rate limit above -- it doesn't stop a
+# the form carries it as a hidden field, and _result.html repeats it in the
+# download form, so one token covers both submissions from a page load. The
+# routes reject requests with no token, a token this process never issued, or a
+# token replayed from a different client. This is on top of, not instead of,
+# the per-client compile rate limit above - it doesn't stop a
 # determined attacker (load the page once, replay the token from the same IP), it
 # blocks copy-pasted curl commands that never load the page at all, and tokens
 # leaked or copy-pasted to a different client.
@@ -316,6 +316,59 @@ def _valid_session_token(token, client: str, *, require_verified: bool = False) 
     if require_verified and not verified:
         return False
     return issued_client == client and time.monotonic() - issued_at < SESSION_TOKEN_TTL
+
+
+# /calculate keeps the NamkhaRequest it calculated and sends the browser an id
+# for it. /download.pdf posts that id back, so the PDF is built from the request
+# that produced the sheet, not from form fields the browser could edit.
+# A handle expires with the session token /download.pdf checks first. The count
+# is capped as well, because an expiry time does not limit how many unexpired
+# handles pile up.
+MAX_RESULT_HANDLES = 4096
+
+# id -> (request, form fields for the log, generation time), oldest first.
+_result_handles: OrderedDict[str, tuple[NamkhaRequest, dict, float]] = OrderedDict()
+
+
+def _oldest_handle_generated_at() -> float:
+    """When the handle at the front, the oldest one, was generated."""
+    _, _, generated_at = next(iter(_result_handles.values()))
+    return generated_at
+
+
+def _store_result_handle(namkha_request: NamkhaRequest, log_inputs: dict) -> str:
+    """Keep a calculated request for its download and return the id for it.
+
+    log_inputs is passed along because /download.pdf no longer reads a form, and its
+    log line records the same fields /calculate did.
+    """
+    now = time.monotonic()
+    # Expired handles are the oldest, so they sit at the front:
+    # drop until the front is live again.
+    while _result_handles and now - _oldest_handle_generated_at() >= SESSION_TOKEN_TTL:
+        _result_handles.popitem(last=False)
+    while len(_result_handles) >= MAX_RESULT_HANDLES:
+        _result_handles.popitem(last=False)
+    result_id = secrets.token_urlsafe(32)
+    _result_handles[result_id] = (namkha_request, log_inputs, now)
+    return result_id
+
+
+def _read_result_handle(result_id) -> tuple[NamkhaRequest, dict] | None:
+    """The request an id stands for, or None when the id is unknown or expired.
+
+    Reading does not spend the handle: a user may download the same sheet
+    multiple times.
+    """
+    if not result_id:
+        return None
+    entry = _result_handles.get(result_id)
+    if entry is None:
+        return None
+    namkha_request, log_inputs, generated_at = entry
+    if time.monotonic() - generated_at >= SESSION_TOKEN_TTL:
+        return None
+    return namkha_request, log_inputs
 
 
 # calculate_namkha (skyfield astronomy) result cache. The typical flow submits the
@@ -440,10 +493,14 @@ TURNSTILE_ERROR = (
     "happening, reload the page."
 )
 
-# Fields echoed back into the download form by _result.html. An allowlist, so a
-# spent single-use Turnstile token is never carried into the next submission and
-# arbitrary injected keys aren't reflected either.
-_ECHOED_FIELDS = frozenset(FIELDS) | {"session_token"}
+
+def _sheet_label(form) -> str:
+    """Alt text for the sheet image: who it is for and what was calculated."""
+    name = (form.get("name") or "").strip()
+    named = f" for {name}" if name else ""
+    namkha_type = (form.get("namkha_type") or "").lower()
+    method = (form.get("method") or "").lower()
+    return f"Namkha calculation sheet{named}, {namkha_type} type, {method} method"
 
 
 def _log_unexpected(route: str, form, exc: Exception) -> None:
@@ -459,15 +516,22 @@ def _result_response(
     form,
     error: str | None = None,
     svg: str | None = None,
+    result_id: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
     """Single context shape for _result.html, used by both the success and
-    error swaps so the template never sees a partial context."""
-    echoed = {key: value for key, value in form.items() if key in _ECHOED_FIELDS}
+    error swaps so the template never sees a partial context.
+    """
     return templates.TemplateResponse(
         request,
         "_result.html",
-        {"error": error, "svg": svg, "form": echoed},
+        {
+            "error": error,
+            "svg": svg,
+            "result_id": result_id,
+            "session_token": form.get("session_token"),
+            "sheet_label": _sheet_label(form) if svg else "",
+        },
         status_code=status_code,
     )
 
@@ -550,7 +614,10 @@ async def calculate(request: Request):
     # the mark unlocks, so a submission that never produced one doesn't earn it.
     _mark_session_verified(session_token)
     log_event(logger, "/calculate", form, outcome="ok", result=result)
-    return _result_response(request, form, svg=svg)
+    result_id = _store_result_handle(
+        namkha_request, {field: form.get(field) for field in FIELDS}
+    )
+    return _result_response(request, form, svg=svg, result_id=result_id)
 
 
 def _pdf_filename(namkha_request: NamkhaRequest) -> str:
@@ -603,29 +670,25 @@ async def download_pdf(request: Request):
             detail="Session expired; reload the page and calculate again.",
         )
 
-    try:
-        namkha_request = build_request(form)
-    except ValueError as exc:
-        # build_request only raises ValueErrors with user-facing messages.
-        log_event(
-            logger,
-            "/download.pdf",
-            form,
-            outcome="reject",
-            error=str(exc),
-            level=logging.WARNING,
+    handle = _read_result_handle(form.get("result_id"))
+    if handle is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This result has expired. Please calculate again.",
         )
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    namkha_request, log_inputs = handle
 
     try:
         async with _compile_slot("/download.pdf"):
             result = await run_in_threadpool(_cached_calculate_namkha, namkha_request)
             pdf = await run_in_threadpool(render_pdf, result)
     except ValueError as exc:
+        # /calculate already ran this request, so a failure here means the
+        # library answered differently the second time. Kept as a safeguard.
         log_event(
             logger,
             "/download.pdf",
-            form,
+            log_inputs,
             outcome="fail",
             error=str(exc),
             level=logging.ERROR,
@@ -634,10 +697,10 @@ async def download_pdf(request: Request):
             status_code=400, detail=_userfriendly_calculation_error(exc)
         ) from exc
     except Exception as exc:
-        _log_unexpected("/download.pdf", form, exc)
+        _log_unexpected("/download.pdf", log_inputs, exc)
         raise
 
-    log_event(logger, "/download.pdf", form, outcome="ok", result=result)
+    log_event(logger, "/download.pdf", log_inputs, outcome="ok", result=result)
     return Response(
         content=pdf,
         media_type="application/pdf",
