@@ -90,6 +90,13 @@ def test_editing_a_birth_detail_drops_the_resolved_timezone(page, live_server):
 
 
 def test_timezone_modes_feed_hidden_inputs(page, live_server):
+    """Every mode has to end with a value in resolved_timezone, whatever the user
+    picked. That field is the only zone the calculation accepts, so a mode that
+    fills the visible controls but leaves it empty submits nothing usable.
+
+    Berlin coordinates throughout: the library checks a chosen zone or offset
+    against the birth place, so a zone from somewhere else is refused.
+    """
     page.goto(live_server)
     # Automatic is the default: only the mode select and status line render,
     # and neither hidden field submits a value.
@@ -99,35 +106,67 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
 
     page.get_by_text("Manually set coordinates").click()
-    page.fill("#latitude-ui", "10.5")
-    page.fill("#longitude-ui", "20.5")
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
     # Disabled UI inputs aren't serialized; the hidden :value mirrors are what posts.
-    expect(page.locator("input[name='latitude']")).to_have_value("10.5")
-    expect(page.locator("input[name='longitude']")).to_have_value("20.5")
+    expect(page.locator("input[name='latitude']")).to_have_value("52.52")
+    expect(page.locator("input[name='longitude']")).to_have_value("13.405")
+    resolved = page.locator("input[name='resolved_timezone']")
+    expect(resolved).to_have_value(
+        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
+    )
 
     # List mode: fuzzy search over the library's zone list, selection commits.
     page.select_option("#timezone-mode", "list")
     search = page.locator("#timezone-search")
     expect(search).to_be_visible()
-    search.fill("kath")
+    search.fill("berl")
     suggestion = page.locator(".timezone-suggestion").first
-    expect(suggestion).to_contain_text("Asia/Kathmandu")
+    expect(suggestion).to_contain_text("Europe/Berlin")
     suggestion.click()
-    expect(search).to_have_value("Asia/Kathmandu")
-    expect(page.locator("input[name='timezone']")).to_have_value("Asia/Kathmandu")
+    expect(search).to_have_value("Europe/Berlin")
+    expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
+    expect(resolved).to_have_value(re.compile(r"^v1\|USER_ZONE\|Europe/Berlin\|"))
 
     # Offset mode: sign + time-ish entry submit combined; zone field goes empty.
     page.select_option("#timezone-mode", "offset")
     expect(page.locator("#timezone-search")).to_have_count(0)
-    page.fill("#utc-offset-time", "5:45")
-    expect(page.locator("input[name='utc_offset']")).to_have_value("+5:45")
+    page.fill("#utc-offset-time", "1:00")
+    expect(page.locator("input[name='utc_offset']")).to_have_value("+1:00")
     expect(page.locator("input[name='timezone']")).to_have_value("")
+    # The offset input resolves on change, so the lookup waits for the user to
+    # leave the field rather than firing on every keystroke of "1:00".
+    page.locator("#utc-offset-time").blur()
+    expect(resolved).to_have_value(re.compile(r"^v1\|USER_OFFSET\|\|3600\|"))
     # DST is meaningless for a fixed offset: the control folds away.
     expect(page.locator("#on_summer_time")).to_be_hidden()
     # An out-of-range entry is flagged invalid, never silently dropped.
     page.fill("#utc-offset-time", "16:30")
     assert not page.locator("#utc-offset-time").evaluate("el => el.checkValidity()")
+
+
+def test_status_line_shows_the_name_the_sheet_will_use(page, live_server):
+    """Berlin in 1890 predates standard time there, so the calculation runs on
+    sun-based local time while the resolved zone key stays Europe/Berlin. The
+    status line has to say what the sheet will say, not the key behind it."""
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_time", "12:00")
+
+    page.fill("#birth_date", "1985-06-15")
+    expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
+
+    page.fill("#birth_date", "1890-06-15")
+    expect(page.locator(".timezone-detected")).to_have_text("Detected: mean solar time")
+    # The key is unchanged underneath; only what the reader is shown differs.
+    expect(page.locator("input[name='resolved_timezone']")).to_have_value(
+        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
+    )
 
 
 def test_timezone_search_without_selection_blocks_submit(page, live_server):
@@ -202,6 +241,7 @@ _RELEASE_REPLIES = """
     const body = {
       resolved_timezone: 'reply-' + index,
       timezone: 'Europe/Berlin',
+      label: 'Europe/Berlin',
       derivation: 'CERTAIN',
       notes: [],
     };
