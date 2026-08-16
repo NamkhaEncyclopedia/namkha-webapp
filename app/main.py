@@ -372,14 +372,14 @@ def _read_result_handle(result_id) -> tuple[NamkhaRequest, dict] | None:
 
 
 # calculate_namkha (skyfield astronomy) result cache. The typical flow submits the
-# same form twice -- /calculate for the preview, then /download.pdf for the file --
+# same form twice - /calculate for the preview, then /download.pdf for the file -
 # and without this both runs redo the astronomy from scratch. The Typst compile
 # itself still runs twice (SVG vs. PDF are different output formats, nothing to
 # share there); this only saves the calculation in between.
 # `nc.Subject` is a frozen dataclass (hashable) carrying every input that shapes
-# the result and its notes -- birth_timezone (None = derived) and on_summer_time
-# included -- and NamkhaRequest is frozen too, so the request itself keys the
-# cache and a field added to it joins the key automatically.
+# the result and its notes - resolved_timezone, which holds the zone and the
+# summer-time answer, included - and NamkhaRequest is frozen too, so the request
+# itself keys the cache and a field added to it joins the key automatically.
 RESULT_CACHE_MAXSIZE = 256
 _result_cache: OrderedDict[NamkhaRequest, nc.NamkhaCalculationResult] = OrderedDict()
 _result_cache_lock = threading.Lock()
@@ -770,8 +770,6 @@ async def timezone_lookup(
             "Check the place and the time zone.",
         ) from error
     except nc.TimezoneError as error:
-        # Nothing else reaches here today. Keep a plain answer rather than
-        # leaking the library's wording if something does.
         raise HTTPException(
             status_code=400,
             detail="Could not work out the time zone for this birth.",
