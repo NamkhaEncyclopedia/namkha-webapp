@@ -243,7 +243,7 @@
                            x-model="latitude"
                            :disabled="!manualCoords"
                            @input="invalidateTimezone()"
-                           @change="fetchTimezone()">
+                           @change="roundCoordinates(); fetchTimezone()">
                     <input type="hidden" name="latitude" :value="latitude">
                   </div>
                   <div>
@@ -257,7 +257,7 @@
                            x-model="longitude"
                            :disabled="!manualCoords"
                            @input="invalidateTimezone()"
-                           @change="fetchTimezone()">
+                           @change="roundCoordinates(); fetchTimezone()">
                     <input type="hidden" name="longitude" :value="longitude">
                   </div>
                 </div>
@@ -648,10 +648,23 @@
           }
         },
 
+        // Keep coordinates at four decimals, about 11 m on the ground. Both
+        // ways of setting a place agree that way, so the same place always asks
+        // the same question and the server can reuse its answer.
+        roundCoordinates() {
+          for (const field of ['latitude', 'longitude']) {
+            const value = Number(this[field]);
+            if (this[field] !== '' && Number.isFinite(value)) {
+              this[field] = value.toFixed(4);
+            }
+          }
+        },
+
         selectPlace(suggestion) {
           this.placeQuery = suggestion.label;
-          this.latitude = suggestion.lat.toFixed(4);
-          this.longitude = suggestion.lon.toFixed(4);
+          this.latitude = suggestion.lat;
+          this.longitude = suggestion.lon;
+          this.roundCoordinates();
           this.closeSuggestions();
           this.fetchTimezone();
         },
@@ -713,9 +726,18 @@
           this.invalidateTimezone();
           const requestId = this.timezoneRequestId;
           // The birth date decides which time zone applied, and the birth time
-          // decides how it reads, so neither can be left out.
+          // decides how it reads, so neither can be left out. Read both now:
+          // $refs is only reachable while the change that called this is still
+          // being handled, and the wait below ends that.
           const birthDate = this.$refs.birthDate?.value;
           const birthTime = this.$refs.birthTime?.value;
+          // Wait before asking. Changing the mode or the offset touches several
+          // fields in a row, and this way that sends one request instead of
+          // several: every change moves the id, so the waits it started before
+          // stop here. The answer is already cleared, so nothing stale can be
+          // submitted during the wait.
+          await new Promise(resolve => setTimeout(resolve, 400));
+          if (requestId !== this.timezoneRequestId) return;  // superseded
           if (this.latitude === '' || this.longitude === '' || !birthDate || !birthTime) return;
           // In 'list' and 'offset' mode the user has named the zone. Send it, so the
           // answer is about the zone the sheet will use, not the one the birth

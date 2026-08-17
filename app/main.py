@@ -79,6 +79,10 @@ TEST_MODE_ENABLED = os.getenv("NAMKHA_TEST_MODE") == "1"
 # - a polygon search, and for a pre-1970 birth a ray cast over the historical
 # border maps - so the cache keeps repeats cheap and a per-IP fixed window caps
 # how hard one client can hammer the endpoint.
+# The limit is this high because one person filling the form in sends many
+# requests: the form asks again after every change to the place, the date, the
+# time, the mode, the chosen zone, the offset and the summer time answer. The
+# count is kept per worker, so running N workers allows N times this number.
 TIMEZONE_RATE_LIMIT = 120  # requests per window per client
 TIMEZONE_RATE_WINDOW = 60.0  # seconds
 _timezone_hits: dict[str, tuple[float, int]] = {}

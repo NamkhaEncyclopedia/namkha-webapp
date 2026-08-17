@@ -110,9 +110,11 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     page.fill("#longitude-ui", "13.405")
     page.fill("#birth_date", "1985-06-15")
     page.fill("#birth_time", "12:00")
-    # Disabled UI inputs aren't serialized; the hidden :value mirrors are what posts.
-    expect(page.locator("input[name='latitude']")).to_have_value("52.52")
-    expect(page.locator("input[name='longitude']")).to_have_value("13.405")
+    # Disabled UI inputs aren't serialized; the hidden :value mirrors are what
+    # posts. Typed coordinates are rounded to four decimals on leaving the
+    # field, the same as the ones a place from the list brings.
+    expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
+    expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
     resolved = page.locator("input[name='resolved_timezone']")
     expect(resolved).to_have_value(
         re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
@@ -270,6 +272,10 @@ def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
     # Only the two edits below may be in flight when the replies are released.
     page.evaluate("() => { window.__heldTimezoneReplies = []; }")
     page.fill("#birth_date", "1940-06-15")  # request 0, the slow one
+    # The form waits before asking, so let this request go out before the next
+    # edit. Back to back the two would collapse into one, and there would be no
+    # late reply to test.
+    page.wait_for_function("() => window.__heldTimezoneReplies.length === 1")
     page.fill("#birth_date", "1985-06-15")  # request 1, asked for later
     page.wait_for_function("() => window.__heldTimezoneReplies.length === 2")
 
@@ -277,3 +283,27 @@ def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
     page.evaluate(_RELEASE_REPLIES, [1, 0])
     resolved = page.locator("input[name='resolved_timezone']")
     expect(resolved).to_have_value("reply-1")
+
+
+def test_edits_in_a_row_ask_once(page, live_server):
+    """The form waits before asking, so a run of edits sends one request. Every
+    edit on its own would be one request each, and the endpoint is rate
+    limited."""
+    page.add_init_script(_HOLD_TIMEZONE_REPLIES)
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_time", "12:00")
+
+    page.evaluate("() => { window.__heldTimezoneReplies = []; }")
+    # Three edits, close enough together that only the last one is asked about.
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_date", "1986-06-15")
+    page.fill("#birth_date", "1987-06-15")
+    page.wait_for_function("() => window.__heldTimezoneReplies.length === 1")
+    # Long enough for the two earlier waits to have ended, had they survived.
+    page.wait_for_timeout(600)
+    assert page.evaluate("() => window.__heldTimezoneReplies.length") == 1
+    held = page.evaluate("() => window.__heldTimezoneReplies[0].url")
+    assert "birth_date=1987-06-15" in held
