@@ -7,7 +7,7 @@ import namkha_calculator as nc
 import pytest
 
 from app import main, notes, turnstile
-from app.forms import RESOLVE_AGAIN_MESSAGE
+from app.forms import FIELDS, RESOLVE_AGAIN_MESSAGE
 from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
 from app.timezone_tickets import read_ticket
 
@@ -19,12 +19,13 @@ def test_index_ok(client):
     assert main.constants.APP_VERSION in response.text  # version badge
 
 
-def test_the_rendered_form_uses_the_field_name_constant(client):
-    """The ticket field name appears twice: as a literal in index.html, and as
-    timezone_tickets.FIELD_NAME in Python. This fetches the page and looks for the
-    constant's value, so the two copies cannot drift apart."""
+def test_the_rendered_form_carries_every_field_build_request_reads(client):
+    """Each field name is written twice: as a literal in index.html, and in
+    forms.FIELDS. This fetches the page and looks for every name the Python side
+    holds, so no field can be renamed on one side alone."""
     page = client.get("/")
-    assert f'name="{TIMEZONE_TICKET_FIELD}"' in page.text
+    missing = [field for field in FIELDS if f'name="{field}"' not in page.text]
+    assert missing == []
 
 
 def test_favicon_redirects(client):
