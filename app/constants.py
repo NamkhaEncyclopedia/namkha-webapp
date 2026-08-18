@@ -135,3 +135,7 @@ def _tz_label(zone_name: str) -> str:
 TIMEZONES = [
     (zone_name, _tz_label(zone_name)) for zone_name in sorted(set(nc.zone_keys()))
 ]
+
+# The same keys, for checking one that arrives on a request. Built from
+# TIMEZONES so the picker and the check cannot come apart.
+ZONE_KEYS = frozenset(zone_name for zone_name, _ in TIMEZONES)

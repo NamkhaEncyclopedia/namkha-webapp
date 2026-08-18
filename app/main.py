@@ -759,13 +759,20 @@ async def timezone_lookup(
     if _timezone_rate_limited(client):
         raise HTTPException(status_code=429, detail="Too many requests")
 
+    zone_key = timezone.strip()
     # The library refuses both at once with a plain ValueError, which would
     # leave this route as the one input error that 500s instead of 400s.
-    if timezone.strip() and utc_offset.strip():
+    if zone_key and utc_offset.strip():
         raise HTTPException(
             status_code=400,
             detail="Give either a time zone or a UTC offset, not both.",
         )
+
+    # The library turns a zone key into a path under its bundled tzdata, so only
+    # a key the picker offers reaches it. An empty key is automatic mode, where
+    # the zone comes from a place and a date.
+    if zone_key and zone_key not in constants.ZONE_KEYS:
+        raise HTTPException(status_code=400, detail="Select a valid birth time zone.")
 
     try:
         offset = parse_utc_offset(utc_offset) if utc_offset.strip() else None
@@ -781,7 +788,7 @@ async def timezone_lookup(
             latitude,
             longitude,
             birth_datetime,
-            timezone.strip() or None,
+            zone_key or None,
             None if offset is None else round(offset.total_seconds()),
             summer_time,
         )

@@ -668,6 +668,22 @@ def test_timezone_refuses_an_unknown_zone(client):
     assert response.json()["detail"] == "Select a valid birth time zone."
 
 
+def test_a_zone_the_picker_does_not_offer_never_reaches_the_library(client):
+    for zone_key in ("../" * 14 + "etc/passwd", "Europe/../../secret", "Mars/Phobos"):
+        response = client.get("/timezone", params={**BERLIN_1985, "timezone": zone_key})
+        assert response.status_code == 400, zone_key
+        assert response.json()["detail"] == "Select a valid birth time zone."
+    assert main._cached_resolve_timezone.cache_info().misses == 0
+
+
+def test_the_picker_zones_still_resolve(client):
+    response = client.get(
+        "/timezone", params={**BERLIN_1985, "timezone": "Europe/Berlin"}
+    )
+    assert response.status_code == 200
+    assert response.json()["timezone"] == "Europe/Berlin"
+
+
 def test_timezone_never_invents_an_answer(client):
     """A time zone that cannot be worked out must not come back as a usable
     value; the form has to block instead."""
