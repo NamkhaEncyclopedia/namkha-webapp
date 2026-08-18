@@ -46,6 +46,14 @@ PRERELEASE_LABEL = _prerelease_label(LIBRARY_VERSION)  # "alpha" for 0.1.0a4
 # which works on any hostname: TURNSTILE_SITEKEY=1x00000000000000000000AA.
 TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "0x4AAAAAAD9sLh4BbknGiGZq")
 
+# How long the server keeps what one open page needs: its session token, the
+# handle for its download, and the ticket for its resolved time zone. All three
+# stop being usable together, because /calculate and /download.pdf check the
+# session token first. Long enough to fill the form in unhurried.
+# Here rather than in main.py because app/timezone_tickets.py needs it too and
+# cannot import main.py: main.py imports forms.py, which imports that module.
+SESSION_TTL = 1800.0  # seconds
+
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {
     nc.Element.WOOD: "#3ABE5B",

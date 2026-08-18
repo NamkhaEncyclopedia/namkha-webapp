@@ -18,8 +18,9 @@ from app.forms import (
     RESOLVE_AGAIN_MESSAGE,
     build_request,
 )
-from app.resolved_timezone import FIELD_NAME as RESOLVED_TIMEZONE_FIELD
-from tests.support import resolved_timezone_field
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
+from app.timezone_tickets import SESSION_TTL, _tickets
+from tests.support import timezone_ticket_field
 
 _BASE_FORM = {
     "name": "Jane",
@@ -34,23 +35,25 @@ _BASE_FORM = {
 }
 
 
-# The resolved time zone for the baseline form. Tests whose form cannot be
-# resolved at all, such as a birth date of "not-a-date" with no time zone to
-# find, pass this so they reach the parse error they are actually about.
-_BASE_RESOLVED = resolved_timezone_field(_BASE_FORM)
+def _base_ticket():
+    """A ticket for the baseline form. Tests whose own form cannot be resolved at
+    all, such as a birth date of "not-a-date" with no time zone to find, pass this
+    so they reach the parse error they are actually about.
+    """
+    return timezone_ticket_field(_BASE_FORM)
 
 
 def _good_form(**overrides):
-    """A form as the page submits one, including the resolved time zone.
+    """A form as the page submits one, including the time zone ticket.
 
-    The hidden field is worked out from whatever the form ends up saying, so a
-    test overriding the date or the coordinates still gets a value that fits it.
-    Tests about a value that does *not* fit pass the field themselves.
+    The ticket stands for a zone worked out from whatever the form ends up saying,
+    so a test overriding the date or the coordinates still gets one that fits it.
+    Tests about a ticket that does *not* fit pass the field themselves.
     """
     form = dict(_BASE_FORM)
     form.update(overrides)
-    if RESOLVED_TIMEZONE_FIELD not in form:
-        form[RESOLVED_TIMEZONE_FIELD] = resolved_timezone_field(form)
+    if TIMEZONE_TICKET_FIELD not in form:
+        form[TIMEZONE_TICKET_FIELD] = timezone_ticket_field(form)
     return form
 
 
@@ -116,88 +119,67 @@ def test_absent_or_blank_location_name_is_none(overrides):
     assert request.subject.birth_location.name is None
 
 
-def test_the_resolved_timezone_is_used_as_submitted():
+def test_the_zone_behind_the_ticket_is_the_one_used():
     request = build_request(_good_form())
     assert request.subject.resolved_timezone.key == "Asia/Kathmandu"
 
 
 @pytest.mark.parametrize("field_value", ["", "   ", None])
-def test_a_form_without_a_resolved_timezone_is_refused(field_value):
+def test_a_form_without_a_ticket_is_refused(field_value):
     """Nothing is missing by accident: the page always sends one. Filling the
     gap here would hide a broken form, and the zone we picked could differ from
     the one the user was shown."""
     form = _good_form()
     if field_value is None:
-        del form[RESOLVED_TIMEZONE_FIELD]
+        del form[TIMEZONE_TICKET_FIELD]
     else:
-        form[RESOLVED_TIMEZONE_FIELD] = field_value
+        form[TIMEZONE_TICKET_FIELD] = field_value
     with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
         build_request(form)
 
 
-@pytest.mark.parametrize(
-    "field_value",
-    [
-        "nonsense",
-        "v1|too|few|fields",
-        # A value this app once wrote but no longer reads.
-        "v0|USER_ZONE|Asia/Kathmandu||CERTAIN|0|_|27.7|85.32|1990-07-22||1582-10-15",
-    ],
-)
-def test_an_unreadable_resolved_timezone_is_refused(field_value):
+def test_a_ticket_the_server_never_issued_is_refused():
     with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
-        build_request(_good_form(**{RESOLVED_TIMEZONE_FIELD: field_value}))
+        build_request(_good_form(**{TIMEZONE_TICKET_FIELD: "not-a-real-ticket"}))
 
 
-# Real values with one component swapped for an impossible one, rather than
-# hand-written lines: the field order belongs to app/resolved_timezone.py and
-# restating it here would rot the moment it changes.
-_UNKNOWN_ZONE_KEY = _BASE_RESOLVED.replace("Asia/Kathmandu", "Mars/Phobos", 1)
-_ABSURD_OFFSET = resolved_timezone_field(
-    dict(_BASE_FORM, timezone="", utc_offset="+5:45")
-).replace("|20700|", "|100000|", 1)
-
-
-@pytest.mark.parametrize(
-    "field_value",
-    [
-        _UNKNOWN_ZONE_KEY,  # no tzdb has this key
-        _ABSURD_OFFSET,  # 27 hours is past what a UTC offset can be
-    ],
-)
-def test_a_timezone_that_cannot_be_rebuilt_is_refused(field_value):
-    """These get past the field-by-field read and only fail when the time zone
-    is actually built. Left to the calculation, they would come back as a 500;
-    build_request promises every error it raises is safe to show."""
+def test_an_expired_ticket_is_refused():
+    form = _good_form()
+    ticket = form[TIMEZONE_TICKET_FIELD]
+    resolved_timezone, issued_at = _tickets[ticket]
+    _tickets[ticket] = (resolved_timezone, issued_at - SESSION_TTL - 1)
     with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
-        build_request(_good_form(**{RESOLVED_TIMEZONE_FIELD: field_value}))
+        build_request(form)
 
 
-@pytest.mark.parametrize(
-    "moved",
-    [
-        {"birth_date": "1990-07-23"},
-        {"latitude": "48.86"},
-        {"longitude": "2.35"},
-    ],
-)
-def test_details_moving_after_the_timezone_was_resolved_are_refused(moved):
-    """Working the zone out again here would be slow and might contradict what
-    the page already showed. Going ahead with the old one would print a sheet
-    for a place or date the user has left behind. Refusing is what is left."""
-    stale = _good_form()[RESOLVED_TIMEZONE_FIELD]
-    form = _good_form(**moved, **{RESOLVED_TIMEZONE_FIELD: stale})
+# Paris, far enough from the baseline form's Kathmandu that a zone worked out for
+# one cannot belong to the other.
+_PARIS = {"latitude": "48.86", "longitude": "2.35"}
+
+
+def test_a_moved_birth_place_is_refused():
+    for_kathmandu = _good_form()[TIMEZONE_TICKET_FIELD]
+    form = _good_form(**_PARIS, **{TIMEZONE_TICKET_FIELD: for_kathmandu})
+    with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
+        build_request(form)
+
+
+def test_a_moved_birth_date_is_refused():
+    for_the_baseline_date = _good_form()[TIMEZONE_TICKET_FIELD]
+    form = _good_form(
+        birth_date="1990-07-23", **{TIMEZONE_TICKET_FIELD: for_the_baseline_date}
+    )
     with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
         build_request(form)
 
 
 def test_the_birth_time_may_move_without_resolving_again():
-    """`kept` is the resolved_timezone worked out for birth_time 08:15. `form`
-    submits birth_time 09:40 with the same `kept` value. assert_binds compares
+    """`kept` is the ticket for a zone worked out for birth_time 08:15. `form`
+    submits birth_time 09:40 with that same ticket. assert_binds compares
     only the date and the place, not the time, so build_request does not
     raise. The assert then checks that birth_datetime uses the new time."""
-    kept = _good_form()[RESOLVED_TIMEZONE_FIELD]
-    form = _good_form(birth_time="09:40", **{RESOLVED_TIMEZONE_FIELD: kept})
+    kept = _good_form()[TIMEZONE_TICKET_FIELD]
+    form = _good_form(birth_time="09:40", **{TIMEZONE_TICKET_FIELD: kept})
     assert build_request(form).subject.birth_datetime.hour == 9
 
 
@@ -221,9 +203,10 @@ class TestTheZoneChoiceMustMatch:
     """
 
     def _keeping_the_resolved_value(self, resolved_with, **posted):
-        """Resolve a zone one way, then submit it with something else posted."""
-        resolved = _good_form(**resolved_with)[RESOLVED_TIMEZONE_FIELD]
-        return _good_form(**posted, **{RESOLVED_TIMEZONE_FIELD: resolved})
+        """Resolve a zone one way, then submit its ticket with something else
+        posted."""
+        ticket = _good_form(**resolved_with)[TIMEZONE_TICKET_FIELD]
+        return _good_form(**posted, **{TIMEZONE_TICKET_FIELD: ticket})
 
     def test_a_different_chosen_zone_is_refused(self):
         form = self._keeping_the_resolved_value(
@@ -309,7 +292,7 @@ class TestSummerTimeAnswerMatches:
         form = _good_form(
             **self.REPEATED,
             on_summer_time="false",
-            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
+            **{TIMEZONE_TICKET_FIELD: resolved[TIMEZONE_TICKET_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
@@ -319,7 +302,7 @@ class TestSummerTimeAnswerMatches:
         form = _good_form(
             **self.REPEATED,
             on_summer_time="",
-            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
+            **{TIMEZONE_TICKET_FIELD: resolved[TIMEZONE_TICKET_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
@@ -329,7 +312,7 @@ class TestSummerTimeAnswerMatches:
         form = _good_form(
             **self.REPEATED,
             on_summer_time="true",
-            **{RESOLVED_TIMEZONE_FIELD: resolved[RESOLVED_TIMEZONE_FIELD]},
+            **{TIMEZONE_TICKET_FIELD: resolved[TIMEZONE_TICKET_FIELD]},
         )
         with pytest.raises(ValueError, match=re.escape(RESOLVE_AGAIN_MESSAGE)):
             build_request(form)
@@ -364,6 +347,6 @@ class TestSummerTimeAnswerMatches:
 def test_bad_input_raises_user_message(overrides, message):
     # These forms cannot be resolved, so they carry the baseline value. Every
     # message below comes from a parse that runs before the time zone is read.
-    form = _good_form(**overrides, **{RESOLVED_TIMEZONE_FIELD: _BASE_RESOLVED})
+    form = _good_form(**overrides, **{TIMEZONE_TICKET_FIELD: _base_ticket()})
     with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
         build_request(form)

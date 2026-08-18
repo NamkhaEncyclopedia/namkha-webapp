@@ -7,6 +7,9 @@ import namkha_calculator as nc
 import pytest
 
 from app import main, notes, turnstile
+from app.forms import RESOLVE_AGAIN_MESSAGE
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
+from app.timezone_tickets import read_ticket
 
 
 def test_index_ok(client):
@@ -14,6 +17,14 @@ def test_index_ok(client):
     assert response.status_code == 200
     assert "Classic" in response.text  # a method label is rendered
     assert main.constants.APP_VERSION in response.text  # version badge
+
+
+def test_the_rendered_form_uses_the_field_name_constant(client):
+    """The ticket field name appears twice: as a literal in index.html, and as
+    timezone_tickets.FIELD_NAME in Python. This fetches the page and looks for the
+    constant's value, so the two copies cannot drift apart."""
+    page = client.get("/")
+    assert f'name="{TIMEZONE_TICKET_FIELD}"' in page.text
 
 
 def test_favicon_redirects(client):
@@ -53,6 +64,26 @@ def test_calculate_parse_error_shows_banner(client, fixture_form):
     assert response.status_code == 200
     assert 'class="error"' in response.text
     assert "Select a gender." in response.text
+
+
+def test_calculate_asks_the_page_to_resolve_again(client, fixture_form):
+    """The page keeps the ticket it was given. Once this process no longer holds
+    the zone behind it, every further press of Calculate would send the same dead
+    ticket, so the refusal has to tell the page to ask for a new one."""
+    form = fixture_form("year_classic_berlin")
+    form[TIMEZONE_TICKET_FIELD] = "not-a-real-ticket"
+    response = client.post("/calculate", data=form)
+    assert RESOLVE_AGAIN_MESSAGE in response.text
+    assert response.headers["hx-trigger"] == main.TIMEZONE_AGAIN_EVENT
+
+
+def test_other_refusals_do_not_ask_for_a_new_zone(client, fixture_form):
+    """Only a refused time zone earns the extra lookup. Any other bad field is
+    the user's to fix, and re-asking would spend a request for nothing."""
+    form = fixture_form("year_classic_berlin")
+    form["gender"] = "OTHER"
+    response = client.post("/calculate", data=form)
+    assert "hx-trigger" not in response.headers
 
 
 def test_calculate_library_error_is_friendly(client, fixture_form):
@@ -178,7 +209,7 @@ def test_session_token_sweep_drops_expired():
     issued_client, issued_at, verified = main._session_tokens[stale]
     main._session_tokens[stale] = (
         issued_client,
-        issued_at - main.SESSION_TOKEN_TTL - 1,
+        issued_at - main.SESSION_TTL - 1,
         verified,
     )
     fresh = main._issue_session_token("fresh-client")
@@ -506,7 +537,11 @@ def test_timezone_lookup_ok(client):
     assert body["timezone"] == "Europe/Berlin"
     assert body["label"] == "Europe/Berlin"
     assert body["derivation"] == "CERTAIN"
-    assert body["resolved_timezone"].startswith("v1|LOCATION_DERIVED|Europe/Berlin|")
+    # The answer itself stays on the server; the ticket stands for it.
+    resolved = read_ticket(body["timezone_ticket"])
+    assert resolved is not None
+    assert resolved.key == "Europe/Berlin"
+    assert resolved.provenance is nc.TimezoneProvenance.LOCATION_DERIVED
 
 
 def test_timezone_reports_how_sure_a_historical_answer_is(client):
@@ -524,9 +559,10 @@ def test_timezone_accepts_a_chosen_zone(client):
         "/timezone", params={**BERLIN_1985, "timezone": "Europe/Berlin"}
     )
     assert response.status_code == 200
-    assert response.json()["resolved_timezone"].startswith(
-        "v1|USER_ZONE|Europe/Berlin|"
-    )
+    resolved = read_ticket(response.json()["timezone_ticket"])
+    assert resolved is not None
+    assert resolved.key == "Europe/Berlin"
+    assert resolved.provenance is nc.TimezoneProvenance.USER_ZONE
 
 
 def test_timezone_accepts_a_provided_offset(client):
@@ -535,7 +571,10 @@ def test_timezone_accepts_a_provided_offset(client):
     body = response.json()
     assert body["timezone"] is None
     assert body["label"] is None
-    assert body["resolved_timezone"].startswith("v1|USER_OFFSET||20700|")
+    resolved = read_ticket(body["timezone_ticket"])
+    assert resolved is not None
+    assert resolved.offset_seconds == 20700
+    assert resolved.provenance is nc.TimezoneProvenance.USER_OFFSET
 
 
 def test_timezone_label_differs_from_the_key_on_sun_based_local_time(client):
@@ -634,7 +673,7 @@ def test_timezone_never_invents_an_answer(client):
     value; the form has to block instead."""
     response = client.get("/timezone", params={**BERLIN_1985, "utc_offset": "+22"})
     assert response.status_code == 400
-    assert "resolved_timezone" not in response.json()
+    assert "timezone_ticket" not in response.json()
 
 
 @pytest.mark.parametrize(

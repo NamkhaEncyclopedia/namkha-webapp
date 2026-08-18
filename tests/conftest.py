@@ -15,9 +15,9 @@ import namkha_calculator as nc
 import pytest
 from starlette.testclient import TestClient
 
-from app import main, turnstile
+from app import main, timezone_tickets, turnstile
 from app.forms import NamkhaRequest
-from app.resolved_timezone import FIELD_NAME as RESOLVED_TIMEZONE_FIELD
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
 from tests import support
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -64,12 +64,12 @@ def fixture_form():
     def load(name, **overrides):
         data = json.loads((FIXTURES_DIR / f"{name}.json").read_text())
         data.update(overrides)
-        # Every real submit carries a resolved time zone, so a fixture form needs
-        # one too, and it has to match the data above. Subject refuses a value
-        # worked out for a different place or date. Storing it in the JSON would go
-        # stale, and the test-mode picker reads those same files in a browser
-        # that resolves the zone itself.
-        data[RESOLVED_TIMEZONE_FIELD] = support.resolved_timezone_field(data)
+        # Every real submit carries a ticket for a resolved time zone, so a
+        # fixture form needs one too, and the zone behind it has to match the data
+        # above. Subject refuses one worked out for a different place or date.
+        # The ticket is made here instead of being read from the JSON, because it
+        # only exists in the memory of the process that issued it.
+        data[TIMEZONE_TICKET_FIELD] = support.timezone_ticket_field(data)
         session_token = main._issue_session_token("testclient")
         main._mark_session_verified(session_token)
         data["session_token"] = session_token
@@ -267,6 +267,16 @@ def _reset_result_cache():
     main._result_cache.clear()
     yield
     main._result_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_timezone_tickets():
+    """Zones kept for the tickets /timezone issues are process-global as well.
+    A leak would let a test submit a ticket another test resolved, so a form that
+    should be refused would go through."""
+    timezone_tickets._tickets.clear()
+    yield
+    timezone_tickets._tickets.clear()
 
 
 @pytest.fixture(autouse=True)

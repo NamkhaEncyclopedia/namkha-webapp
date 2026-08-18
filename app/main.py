@@ -28,18 +28,20 @@ from starlette.concurrency import run_in_threadpool
 
 from app import constants, turnstile
 from app.calculation_render import render_pdf, render_svg
+from app.constants import SESSION_TTL
 from app.event_log import configure_logging, log_event
 from app.forms import (
     FIELDS,
     MAX_LOCATION_NAME_LENGTH,
     MAX_NAME_LENGTH,
+    RESOLVE_AGAIN_MESSAGE,
     NamkhaRequest,
     build_request,
     parse_on_summer_time,
     parse_utc_offset,
 )
 from app.notes import notes_for_display
-from app.resolved_timezone import serialize_resolved_timezone
+from app.timezone_tickets import issue_ticket
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,12 @@ async def _lifespan(_app: FastAPI):
 app = FastAPI(title="Namkha Calculator Web", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
+
+# Sent as HX-Trigger when /calculate refuses for want of a usable time zone. The
+# form listens for it and asks /timezone again, so the next press of Calculate has
+# a ticket this process knows. Without it the page would keep resubmitting the one
+# ticket the server has already forgotten.
+TIMEZONE_AGAIN_EVENT = "namkha-resolve-timezone-again"
 
 # Off by default: enables the "load sample data" picker on the form, backed by
 # tests/fixtures/*.json. Routes are only registered (not just hidden) when set,
@@ -244,21 +252,26 @@ async def _compile_slot(route: str):
 # that mark. Otherwise the bot check would only move the abuse path -- load /,
 # then POST the same compile work to /download.pdf without ever touching the
 # widget.
-SESSION_TOKEN_TTL = 1800.0  # seconds; long enough to fill the form unhurried
+
+# A token lives for SESSION_TTL, shared with the result handles below and with the
+# time zone tickets, because all three stop being usable together.
 # Hard cap on the store, so many distinct clients minting fresh tokens can't grow
 # it without bound -- TTL alone doesn't bound anything, since a flood of tokens is
 # by definition not yet expired. At the cap the oldest live token is evicted to
 # make room, which is a reload for whoever held it, not a failed calculation.
 MAX_SESSION_TOKENS = 4096
+
 # Per-client cap, so one address can't fill the store on its own and push every
 # other visitor out. Deliberately generous: _client_ip buckets a whole office,
 # school or mobile carrier behind one NAT address, and they legitimately share it.
 MAX_TOKENS_PER_CLIENT = 32
+
 # token -> (client, issued_at, turnstile_verified), oldest first. Insertion order
 # is issue order (issued_at ascending) and MUST stay that way -- the sweep below
 # reads it as such. _mark_session_verified rewrites a value in place, which does
 # not reorder; never move_to_end here (unlike _result_cache) or the sweep breaks.
 _session_tokens: OrderedDict[str, tuple[str, float, bool]] = OrderedDict()
+
 # client -> its own tokens, oldest first. Only an index into _session_tokens, kept
 # so both caps are enforced without scanning the whole store on every GET / --
 # that scan is the CPU churn the caps are here to prevent in the first place.
@@ -280,7 +293,7 @@ def _issue_session_token(client: str) -> str:
     # front is live again. Costs one step per token actually evicted, not a scan.
     while _session_tokens:
         oldest, (_, issued_at, _verified) = next(iter(_session_tokens.items()))
-        if now - issued_at < SESSION_TOKEN_TTL:
+        if now - issued_at < SESSION_TTL:
             break
         _drop_session_token(oldest)
     # Trim this client to one below its cap, since a fresh token follows. Only
@@ -319,7 +332,7 @@ def _valid_session_token(token, client: str, *, require_verified: bool = False) 
     issued_client, issued_at, verified = entry
     if require_verified and not verified:
         return False
-    return issued_client == client and time.monotonic() - issued_at < SESSION_TOKEN_TTL
+    return issued_client == client and time.monotonic() - issued_at < SESSION_TTL
 
 
 # /calculate keeps the NamkhaRequest it calculated and sends the browser an id
@@ -349,7 +362,7 @@ def _store_result_handle(namkha_request: NamkhaRequest, log_inputs: dict) -> str
     now = time.monotonic()
     # Expired handles are the oldest, so they sit at the front:
     # drop until the front is live again.
-    while _result_handles and now - _oldest_handle_generated_at() >= SESSION_TOKEN_TTL:
+    while _result_handles and now - _oldest_handle_generated_at() >= SESSION_TTL:
         _result_handles.popitem(last=False)
     while len(_result_handles) >= MAX_RESULT_HANDLES:
         _result_handles.popitem(last=False)
@@ -370,7 +383,7 @@ def _read_result_handle(result_id) -> tuple[NamkhaRequest, dict] | None:
     if entry is None:
         return None
     namkha_request, log_inputs, generated_at = entry
-    if time.monotonic() - generated_at >= SESSION_TOKEN_TTL:
+    if time.monotonic() - generated_at >= SESSION_TTL:
         return None
     return namkha_request, log_inputs
 
@@ -525,7 +538,15 @@ def _result_response(
 ) -> HTMLResponse:
     """Single context shape for _result.html, used by both the success and
     error swaps so the template never sees a partial context.
+
+    The page keeps the ticket it was given. Once this process no longer holds the
+    zone behind it, every further press of Calculate would fail the same way, so a
+    refusal carrying RESOLVE_AGAIN_MESSAGE also asks the page to fetch a new ticket
+    from /timezone.
     """
+    headers = {}
+    if error == RESOLVE_AGAIN_MESSAGE:
+        headers["HX-Trigger"] = TIMEZONE_AGAIN_EVENT
     return templates.TemplateResponse(
         request,
         "_result.html",
@@ -537,6 +558,7 @@ def _result_response(
             "sheet_label": _sheet_label(form) if svg else "",
         },
         status_code=status_code,
+        headers=headers,
     )
 
 
@@ -727,7 +749,7 @@ async def timezone_lookup(
     utc_offset: str = Query(default=""),
     on_summer_time: str = Query(default=""),
 ):
-    """Resolve the birth time zone, which the form then submits back unchanged.
+    """Resolve the birth time zone, keep it, and hand the form a ticket for it.
 
     This is the only place a time zone is worked out. The answer carries how
     sure it is, so the user sees any doubt before committing to a chart rather
@@ -783,7 +805,9 @@ async def timezone_lookup(
     # the polygon search it costs nothing, and keeping it out leaves that cache
     # holding only the expensive part.
     return {
-        "resolved_timezone": serialize_resolved_timezone(resolved),
+        # The zone itself stays here. The form gets only this ticket for it, and
+        # /calculate reads the zone back out of the store.
+        "timezone_ticket": issue_ticket(resolved),
         "timezone": resolved.key,
         # What the sheet will name this time zone. Not always the key: a birth
         # before standard time reached the place runs on sun-based local time.

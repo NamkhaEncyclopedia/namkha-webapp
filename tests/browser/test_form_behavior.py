@@ -7,12 +7,111 @@ and the birth-time precision warning becomes reachable. Flip these assertions th
 """
 
 import json
-import re
+from datetime import date
 
+import namkha_calculator as nc
 import pytest
 from playwright.sync_api import expect
 
+from app.timezone_tickets import _tickets, read_ticket
+
 pytestmark = pytest.mark.browser
+
+
+def resolved_zone(ticket_field):
+    """The zone the form's ticket stands for.
+
+    live_server runs uvicorn in this same process, so the ticket the browser holds
+    can be looked up here. That is what lets these tests assert the zone the whole
+    chain arrived at, not just that some ticket landed.
+    """
+    expect(ticket_field).not_to_have_value("")  # wait for the reply
+    zone = read_ticket(ticket_field.input_value())
+    assert zone is not None, "the server does not know the ticket the form carries"
+    return zone
+
+
+# /calculate needs a Turnstile check against Cloudflare, which this offline suite
+# cannot make, so the two tests below answer it themselves and read what the form
+# sent. `trigger` is the header the real route sends to ask for a new time zone;
+# tests/test_routes.py checks that it sends it.
+STUB_ANSWER = "answered by the test"
+
+
+def stub_calculate(page, posted, trigger=None):
+    def answer(route):
+        posted.append(route.request.post_data)
+        route.fulfill(
+            status=200,
+            content_type="text/html",
+            headers={"HX-Trigger": trigger} if trigger else {},
+            body=f'<p class="error">{STUB_ANSWER}</p>',
+        )
+
+    page.route("**/calculate", answer)
+
+
+def submitted_ticket(body):
+    for pair in (body or "").split("&"):
+        key, _, value = pair.partition("=")
+        if key == "timezone_ticket":
+            return value
+    return ""
+
+
+def test_pressing_calculate_straight_after_an_edit_sends_a_zone(page, live_server):
+    """Pressing Calculate is what ends the edit in a coordinate field, so the
+    lookup and the submit start together. The form has to hold the submit until
+    the answer lands, or it posts no zone and the server refuses a form that is
+    in fact complete."""
+    posted = []
+    stub_calculate(page, posted)
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
+    ticket = page.locator("input[name='timezone_ticket']")
+    resolved_zone(ticket)
+
+    # Retype a coordinate and press Calculate without leaving the field first.
+    page.fill("#longitude-ui", "13.4070")
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+    assert len(posted) == 1
+    assert read_ticket(submitted_ticket(posted[0])) is not None
+
+
+def test_a_forgotten_zone_is_asked_for_again(page, live_server):
+    """What a restart or a full ticket store does to an open page: the server no
+    longer holds the zone the form points at. Without the ask-again header every
+    further press of Calculate would send the same dead ticket, and the refusal
+    telling the user to submit again would never happen."""
+    posted = []
+    stub_calculate(page, posted, trigger="namkha-resolve-timezone-again")
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
+    ticket = page.locator("input[name='timezone_ticket']")
+    resolved_zone(ticket)
+
+    forgotten = ticket.input_value()
+    _tickets.clear()  # the server forgets, while the page keeps its ticket
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+    assert read_ticket(submitted_ticket(posted[-1])) is None  # the dead one went out
+
+    # The refusal carried the header, so the form asked again. Wait for the dead
+    # ticket to go before reading, or the old value is what gets read.
+    expect(ticket).not_to_have_value(forgotten)
+    resolved_zone(ticket)
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+    assert read_ticket(submitted_ticket(posted[-1])) is not None
 
 
 def test_type_gating_frozen_to_year(page, live_server):
@@ -57,42 +156,50 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
-    # The resolved zone rides along in its own field, ready to submit back.
-    expect(page.locator("input[name='resolved_timezone']")).to_have_value(
-        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
-    )
-    # Automatic mode submits no chosen zone; the resolved value carries the answer.
+    # A ticket for the resolved zone rides along in its own field, ready to
+    # submit back.
+    zone = resolved_zone(page.locator("input[name='timezone_ticket']"))
+    assert zone.key == "Europe/Berlin"
+    assert zone.provenance is nc.TimezoneProvenance.LOCATION_DERIVED
+    # Automatic mode submits no chosen zone; the ticket carries the answer.
     expect(page.locator("input[name='timezone']")).to_have_value("")
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
     # The selected label submits as the location name.
     expect(page.locator("input[name='location_name']")).to_have_value("Berlin, Germany")
 
 
-def test_editing_a_birth_detail_drops_the_resolved_timezone(page, live_server):
+def test_editing_a_birth_detail_replaces_the_ticket(page, live_server):
     """A resolved zone belongs to the details it was worked out for. Editing one
-    must clear it, so a stale zone can never reach the calculation."""
+    must drop its ticket, so a stale zone can never reach the calculation."""
     page.goto(live_server)
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
     page.fill("#birth_date", "1985-06-15")
     page.fill("#birth_time", "12:00")
-    resolved = page.locator("input[name='resolved_timezone']")
-    expect(resolved).to_have_value(re.compile(r"\|1985-06-15\|"))
-    # A different birth date can mean a different zone. What lands must be the
-    # answer for the new date, never the one worked out for the old one.
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).for_birth_date == date(1985, 6, 15)
+    for_1985 = ticket.input_value()
+    # A different birth date can mean a different zone. What lands must be a
+    # ticket for the new date, never the one worked out for the old one.
     page.fill("#birth_date", "1940-06-15")
-    expect(resolved).to_have_value(re.compile(r"\|1940-06-15\|"))
+    # Wait for the old ticket to go before reading: it is still in the field for a
+    # moment, and reading then would look up the zone for the old date.
+    expect(ticket).not_to_have_value(for_1985)
+    assert resolved_zone(ticket).for_birth_date == date(1940, 6, 15)
     # An edit that leaves nothing to look up clears the field and stops there,
     # so an incomplete form has no zone to submit.
     page.fill("#birth_time", "")
-    expect(resolved).to_have_value("")
+    expect(ticket).to_have_value("")
 
 
 def test_timezone_modes_feed_hidden_inputs(page, live_server):
-    """Every mode has to end with a value in resolved_timezone, whatever the user
+    """Every mode has to end with a ticket in timezone_ticket, whatever the user
     picked. That field is the only zone the calculation accepts, so a mode that
     fills the visible controls but leaves it empty submits nothing usable.
+
+    Each mode is checked by the zone its ticket stands for, so a mode that fills
+    the wrong hidden field is caught rather than passing on a non-empty ticket.
 
     Berlin coordinates throughout: the library checks a chosen zone or offset
     against the birth place, so a zone from somewhere else is refused.
@@ -115,10 +222,8 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     # field, the same as the ones a place from the list brings.
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
-    resolved = page.locator("input[name='resolved_timezone']")
-    expect(resolved).to_have_value(
-        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
-    )
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).provenance is nc.TimezoneProvenance.LOCATION_DERIVED
 
     # List mode: fuzzy search over the library's zone list, selection commits.
     page.select_option("#timezone-mode", "list")
@@ -131,7 +236,9 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     expect(search).to_have_value("Europe/Berlin")
     expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
-    expect(resolved).to_have_value(re.compile(r"^v1\|USER_ZONE\|Europe/Berlin\|"))
+    zone = resolved_zone(ticket)
+    assert zone.key == "Europe/Berlin"
+    assert zone.provenance is nc.TimezoneProvenance.USER_ZONE
 
     # Offset mode: sign + time-ish entry submit combined; zone field goes empty.
     page.select_option("#timezone-mode", "offset")
@@ -142,7 +249,9 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     # The offset input resolves on change, so the lookup waits for the user to
     # leave the field rather than firing on every keystroke of "1:00".
     page.locator("#utc-offset-time").blur()
-    expect(resolved).to_have_value(re.compile(r"^v1\|USER_OFFSET\|\|3600\|"))
+    zone = resolved_zone(ticket)
+    assert zone.offset_seconds == 3600
+    assert zone.provenance is nc.TimezoneProvenance.USER_OFFSET
     # DST is meaningless for a fixed offset: the control folds away.
     expect(page.locator("#on_summer_time")).to_be_hidden()
     # An out-of-range entry is flagged invalid, never silently dropped.
@@ -165,10 +274,9 @@ def test_status_line_shows_the_name_the_sheet_will_use(page, live_server):
 
     page.fill("#birth_date", "1890-06-15")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: mean solar time")
-    # The key is unchanged underneath; only what the reader is shown differs.
-    expect(page.locator("input[name='resolved_timezone']")).to_have_value(
-        re.compile(r"^v1\|LOCATION_DERIVED\|Europe/Berlin\|")
-    )
+    # The key underneath is unchanged; only what the reader is shown differs.
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).key == "Europe/Berlin"
 
 
 def test_timezone_search_without_selection_blocks_submit(page, live_server):
@@ -241,7 +349,7 @@ _RELEASE_REPLIES = """
   const held = window.__heldTimezoneReplies;
   for (const index of order) {
     const body = {
-      resolved_timezone: 'reply-' + index,
+      timezone_ticket: 'reply-' + index,
       timezone: 'Europe/Berlin',
       label: 'Europe/Berlin',
       derivation: 'CERTAIN',
@@ -281,8 +389,8 @@ def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
 
     # The newer request answers first, the older one straggles in behind it.
     page.evaluate(_RELEASE_REPLIES, [1, 0])
-    resolved = page.locator("input[name='resolved_timezone']")
-    expect(resolved).to_have_value("reply-1")
+    ticket = page.locator("input[name='timezone_ticket']")
+    expect(ticket).to_have_value("reply-1")
 
 
 def test_edits_in_a_row_ask_once(page, live_server):

@@ -96,7 +96,9 @@
                 hx-swap="innerHTML"
                 hx-disabled-elt="find button[type='submit']"
                 x-data="namkhaForm()"
-                x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })">
+                x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
+                @htmx:confirm="holdSubmitForTimezone($event)"
+                @namkha-resolve-timezone-again.window="fetchTimezone()">
             <input type="hidden" name="session_token" value="{{ session_token }}">
             {% if test_mode_enabled %}
               <div class="test-mode-picker"
@@ -322,11 +324,12 @@
                     <input type="hidden"
                            name="utc_offset"
                            :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
-                    <!-- The zone resolved by /timezone, submitted back unchanged.
-                         Empty until a lookup succeeds, and an empty one is
-                         refused on submit: the calculation takes its zone from
-                         here and never works one out for itself. -->
-                    <input type="hidden" name="resolved_timezone" :value="resolvedTimezone">
+                    <!-- The ticket /timezone gave for the zone it kept. Empty
+                         until a lookup succeeds, and an empty one is refused on
+                         submit: the calculation takes its zone from the store
+                         this ticket points into, and never works one out for
+                         itself. -->
+                    <input type="hidden" name="timezone_ticket" :value="timezoneTicket">
                   </div>
                 </div>
                 <template x-if="timezoneMode === 'auto'">
@@ -576,12 +579,14 @@
         timezoneLabel: '',
         // Written only by a /timezone reply, cleared by any edit that could
         // change it. Empty means "not resolved yet", never "unchanged".
-        resolvedTimezone: '',
+        timezoneTicket: '',
         timezoneNotes: [],
         // Counts lookups so a slow reply cannot overwrite a newer one. A
         // pre-1970 date searches the historical border maps and can take much
         // longer than the modern date typed after it.
         timezoneRequestId: 0,
+        // The lookup now running, so a submit can wait for it. Null when none is.
+        timezonePending: null,
         timezone: '',
         timezoneQuery: '',
         timezoneSuggestions: [],
@@ -712,17 +717,45 @@
         },
 
         // Forget a resolved time zone, as soon as any input behind it is touched.
-        // A stale value would print a sheet for the wrong zone. An empty one is
+        // A stale ticket would print a sheet for the wrong zone. An empty one is
         // refused on submit instead.
         invalidateTimezone() {
-          this.resolvedTimezone = '';
+          this.timezoneTicket = '';
           this.timezoneNotes = [];
           // Any reply still on its way was asked for before this edit, so it
           // no longer describes what the form says. Move the id past it.
           this.timezoneRequestId += 1;
         },
 
-        async fetchTimezone() {
+        // Ask /timezone, keeping the promise so holdSubmitForTimezone can wait for
+        // this same lookup. Callers fire and forget; none of them await it.
+        //
+        // The form also calls this when /calculate answers with the ask-again event
+        // (main.TIMEZONE_AGAIN_EVENT): the server no longer holds the zone this
+        // ticket points at, and without a new one every further press of Calculate
+        // would send the same dead ticket.
+        fetchTimezone() {
+          this.timezonePending = this.lookUpTimezone();
+          return this.timezonePending;
+        },
+
+        // Let the submit through once a time zone is in hand.
+        //
+        // Alpine calls this from @htmx:confirm on the form. htmx fires that before
+        // it sends, and it allows holding the send back and starting it again later.
+        // The hold is needed because pressing Calculate is itself what ends the edit
+        // in a field that resolves when focus leaves it: the lookup and the submit
+        // start in the same moment, with no time zone between them. Sending then
+        // would have the server refuse a form that is in fact complete.
+        async holdSubmitForTimezone(event) {
+          if (this.timezoneTicket) return;  // already have one, send now
+          event.preventDefault();
+          await this.timezonePending;
+          // true skips a second htmx:confirm, which would hold this send again.
+          event.detail.issueRequest(true);
+        },
+
+        async lookUpTimezone() {
           this.invalidateTimezone();
           const requestId = this.timezoneRequestId;
           // The birth date decides which time zone applied, and the birth time
@@ -777,7 +810,7 @@
             }
             const data = await response.json();
             if (requestId !== this.timezoneRequestId) return;  // superseded
-            this.resolvedTimezone = data.resolved_timezone;
+            this.timezoneTicket = data.timezone_ticket;
             this.timezoneNotes = data.notes;
             this.detectedTimezone = data.timezone || '';
             this.timezoneLabel = data.label || '';

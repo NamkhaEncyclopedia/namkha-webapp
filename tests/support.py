@@ -3,9 +3,9 @@
 Not in conftest.py: there is a second conftest under tests/browser/, so a plain
 `import conftest` picks up whichever one the collector reached first.
 
-Never hand-write a serialized `resolved_timezone` string in a test. It rots
-when the field list or version marker in app/resolved_timezone.py changes, and
-a rotted value that still parses is believed rather than caught.
+A `timezone_ticket` cannot be hand-written: only the running process knows which
+tickets it issued. Generate one through timezone_ticket_field below, inside the test,
+because the autouse fixture empties the store around every test.
 """
 
 from datetime import datetime
@@ -14,7 +14,7 @@ import namkha_calculator as nc
 from namkha_calculator.zone_derivation import resolve_timezone
 
 from app.forms import parse_on_summer_time, parse_utc_offset
-from app.resolved_timezone import serialize_resolved_timezone
+from app.timezone_tickets import issue_ticket
 
 
 def resolve_timezone_at(
@@ -30,11 +30,11 @@ def resolve_timezone_at(
     )
 
 
-def resolved_timezone_field(form):
-    """Make the `resolved_timezone` field value that goes with this form.
+def timezone_ticket_field(form):
+    """Resolve the zone this form describes and return a ticket for it.
 
     The date, time, place and zone choice come out of the form itself, so the
-    text belongs to that exact form. Subject refuses one worked out for a different
+    zone belongs to that exact form. Subject refuses one worked out for a different
     date or place, so call this again after changing any of them.
     """
     birth_datetime = datetime.fromisoformat(
@@ -49,4 +49,4 @@ def resolved_timezone_field(form):
         offset=parse_utc_offset(utc_offset) if utc_offset else None,
         on_summer_time=parse_on_summer_time(form.get("on_summer_time") or ""),
     )
-    return serialize_resolved_timezone(resolved)
+    return issue_ticket(resolved)

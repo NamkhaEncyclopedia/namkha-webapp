@@ -22,6 +22,8 @@ from app.event_log import (
     summarize_result,
 )
 from app.forms import FIELDS, build_request
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
+from tests.support import timezone_ticket_field
 
 _PLAINTEXT_NAME = "Tenzin Norgay"
 
@@ -92,15 +94,30 @@ def test_payload_carries_the_non_sensitive_inputs():
     payload = build_log_payload("/calculate", _form(), outcome="reject", error="bad")
     inputs = payload["inputs"]
     for field in FIELDS:
-        if field == "name":
+        if field in ("name", TIMEZONE_TICKET_FIELD):
             continue
         assert field in inputs
     assert inputs["birth_date"] == "1985-03-15"
     assert inputs["latitude"] == "52.52"
     assert inputs["location_name"] == "Berlin"
+    assert TIMEZONE_TICKET_FIELD not in inputs
+    assert inputs["resolved_timezone"] is None
     assert payload["outcome"] == "reject"
     assert payload["error"] == "bad"
     assert payload["result"] is None
+
+
+def test_payload_records_the_zone_a_ticket_stands_for():
+    """A ticket means nothing in a log. This is the only place the record says
+    which zone the sheet used: the other fields give the user's choice, which is
+    blank whenever the zone came from the birth place."""
+    form = _form()
+    form[TIMEZONE_TICKET_FIELD] = timezone_ticket_field(form)
+    payload = build_log_payload("/calculate", form, outcome="ok")
+    zone = payload["inputs"]["resolved_timezone"]
+    assert set(zone) == {"key", "offset_seconds", "provenance", "derivation"}
+    assert zone["key"] == "Europe/Berlin"
+    assert zone["provenance"] == "USER_ZONE"
 
 
 def test_download_logs_the_inputs_that_produced_the_sheet(

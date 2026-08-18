@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 import namkha_calculator as nc
 from namkha_calculator.localization import is_ambiguous_local_time
 
-from app.resolved_timezone import FIELD_NAME as RESOLVED_TIMEZONE_FIELD
-from app.resolved_timezone import ResolvedTimezoneParseError, parse_resolved_timezone
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
+from app.timezone_tickets import read_ticket
 
 
 @dataclass(frozen=True)
@@ -33,8 +33,8 @@ FIELDS = (
     "timezone",
     "utc_offset",
     "on_summer_time",
-    # The time zone the /timezone route worked out, submitted back unchanged.
-    "resolved_timezone",
+    # Stands for the time zone the /timezone route worked out and kept.
+    "timezone_ticket",
     "latitude",
     "longitude",
     "namkha_type",
@@ -60,9 +60,10 @@ MAX_UTC_OFFSET = timedelta(hours=16)
 # The summer-time select. Blank is a viable answer: the user is not sure.
 ON_SUMMER_TIME_VALUES = {"": None, "true": True, "false": False}
 
-# Shown whenever the resolved time zone is missing, unreadable, or was worked out
-# for something other than what was submitted. All three mean the same thing to
-# the user: the answer on the page no longer belongs to these birth details.
+# Shown whenever the ticket is missing, the server no longer holds the zone it
+# stands for, or that zone was worked out for something other than what was
+# submitted. All three mean the same thing to the user: the answer on the page no
+# longer belongs to these birth details.
 RESOLVE_AGAIN_MESSAGE = (
     "Your birth details changed after the time zone was worked out. "
     "Please re-check the birth place and date and submit again."
@@ -164,14 +165,10 @@ def build_request(form) -> NamkhaRequest:
 
 
 def _timezone_from_form(form, birth_datetime: datetime) -> nc.ResolvedTimezone:
-    """A zone the /timezone route worked out, read back from its field."""
-    field_value = (form.get(RESOLVED_TIMEZONE_FIELD) or "").strip()
-    if not field_value:
+    """A zone the /timezone route worked out and kept, read back by its ticket."""
+    resolved_timezone = read_ticket(form.get(TIMEZONE_TICKET_FIELD))
+    if resolved_timezone is None:
         raise ValueError(RESOLVE_AGAIN_MESSAGE)
-    try:
-        resolved_timezone = parse_resolved_timezone(field_value)
-    except ResolvedTimezoneParseError as exc:
-        raise ValueError(RESOLVE_AGAIN_MESSAGE) from exc
 
     # assert_binds covers the place and the date. The next two are what it
     # cannot see, so they are compared here or nowhere.

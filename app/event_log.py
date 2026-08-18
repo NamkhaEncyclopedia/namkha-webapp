@@ -21,6 +21,8 @@ import sys
 from logging.handlers import QueueHandler, QueueListener
 
 from app.forms import FIELDS
+from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
+from app.timezone_tickets import read_ticket
 
 # The one sensitive form field; hashed everywhere, never logged in clear text.
 _SENSITIVE_FIELD = "name"
@@ -42,6 +44,24 @@ def hash_name(raw: str | None) -> str:
     if not text:
         return "-"
     return hashlib.sha256((_NAME_HASH_SALT + text).encode("utf-8")).hexdigest()[:12]
+
+
+def _zone_for_log(ticket) -> dict | None:
+    """The time zone a ticket stands for, as a few readable fields.
+
+    The ticket itself means nothing in a log. This is the only place the record
+    says which zone was used: the form fields give the user's choice, which is
+    blank in automatic mode. None when the server no longer holds the zone.
+    """
+    resolved_timezone = read_ticket(ticket)
+    if resolved_timezone is None:
+        return None
+    return {
+        "key": resolved_timezone.key,
+        "offset_seconds": resolved_timezone.offset_seconds,
+        "provenance": resolved_timezone.provenance.name,
+        "derivation": resolved_timezone.derivation.name,
+    }
 
 
 def summarize_result(result) -> dict:
@@ -84,9 +104,16 @@ def build_log_payload(
     error: str | None = None,
 ) -> dict:
     """Assemble one log record: route, outcome, hashed name, the remaining form
-    inputs verbatim, and either a result summary or an error string. This is the
-    single place the name is read and hashed, so `name` never reaches a log raw."""
-    inputs = {field: form.get(field) for field in FIELDS if field != _SENSITIVE_FIELD}
+    inputs verbatim, the resolved time zone, and either a result summary or an
+    error string. This is the single place the name is read and hashed, so `name`
+    never reaches a log raw."""
+    inputs = {
+        field: form.get(field)
+        for field in FIELDS
+        if field not in (_SENSITIVE_FIELD, TIMEZONE_TICKET_FIELD)
+    }
+    # The ticket is left out and the zone it stands for takes its place.
+    inputs["resolved_timezone"] = _zone_for_log(form.get(TIMEZONE_TICKET_FIELD))
     return {
         "route": route,
         "outcome": outcome,

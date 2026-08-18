@@ -25,4 +25,7 @@ COPY app ./app
 USER namkha
 
 EXPOSE 8080
+# One worker only: no --workers here. The resolved time zone, the session
+# tokens and the result handles all live in this process's memory, so a second
+# worker would be handed forms it never issued a ticket or a token for.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips=*"]
