@@ -231,7 +231,7 @@
                    x-text="placesError"></p>
                 <p class="place-status"
                    role="status"
-                   x-show="!isSearchingPlaces && !placesError && placeQuery.trim().length >= 3 && suggestions.length === 0"
+                   x-show="!isSearchingPlaces && !placesError && noResultsFound"
                    x-cloak>No places found.</p>
                 <div class="input-columns">
                   <div>
@@ -567,6 +567,7 @@
         activeIndex: -1,
         isSearchingPlaces: false,
         placesError: '',
+        noResultsFound: false,
         manualCoords: false,
         latitude: '',
         longitude: '',
@@ -628,6 +629,7 @@
           if (this.manualCoords) { this.suggestions = []; return; }
           this.activeIndex = -1;
           this.placesError = '';
+          this.noResultsFound = false;
           const query = this.placeQuery.trim();
           if (query.length < 3) { this.suggestions = []; return; }
           this.isSearchingPlaces = true;
@@ -645,6 +647,7 @@
                 .join(', ');
               return { label, lat, lon };
             });
+            this.noResultsFound = this.suggestions.length === 0;
           } catch (error) {
             this.suggestions = [];
             this.placesError = 'Could not search places. You can enter coordinates manually below, or try again later.';
@@ -687,6 +690,7 @@
           this.suggestions = [];
           this.activeIndex = -1;
           this.placesError = '';
+          this.noResultsFound = false;
         },
 
         onPlaceKeydown(event) {

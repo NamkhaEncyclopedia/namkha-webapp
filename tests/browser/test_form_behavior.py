@@ -166,6 +166,8 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
     # The selected label submits as the location name.
     expect(page.locator("input[name='location_name']")).to_have_value("Berlin, Germany")
+    # Picking a suggestion must not leave the "No places found." status up.
+    expect(page.locator(".place-status", has_text="No places found.")).to_be_hidden()
 
 
 def test_editing_a_birth_detail_replaces_the_ticket(page, live_server):
