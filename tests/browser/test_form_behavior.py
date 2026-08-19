@@ -352,6 +352,82 @@ def test_timezone_list_is_ready_before_any_search(page, live_server):
     expect(page.locator(".timezone-suggestion")).to_have_count(zone_count)
     expect(page.locator(".timezone-group")).to_have_count(region_count)
 
+    # Walking up with the arrow keys scrolls the list, and a region's first zone
+    # has to stop below the heading stuck to the top rather than under it.
+    for _ in range(12):
+        search.press("ArrowUp")
+    clearance = page.evaluate("""() => {
+        const list = document.getElementById('timezone-listbox');
+        const active = list.querySelector('.timezone-suggestion.is-active');
+        const heading = list.querySelector('.timezone-group');
+        return active.getBoundingClientRect().top
+             - list.getBoundingClientRect().top
+             - heading.offsetHeight;
+    }""")
+    assert clearance >= -1, f"the active zone sits {-clearance}px under the heading"
+
+
+def test_timezone_labels_follow_the_birth_date(page, live_server):
+    """Kathmandu moved from UTC+5:30 to UTC+5:45 in 1986, so a label has to carry
+    the offset of the birth date rather than today's. tzdata writes a space in a
+    zone name as an underscore, which belongs in the key, not on screen."""
+    page.goto(live_server)
+    page.fill("#birth_date", "1940-06-15")
+    page.fill("#birth_time", "12:00")
+    page.select_option("#timezone-mode", "list")
+    search = page.locator("#timezone-search")
+
+    search.fill("kathmandu")
+    expect(page.locator(".timezone-suggestion").first).to_have_text(
+        "Asia/Kathmandu (UTC+5:30)"
+    )
+    # Moving the birth date past the change relabels the same zone.
+    page.fill("#birth_date", "2000-06-15")
+    expect(page.locator(".timezone-suggestion").first).to_have_text(
+        "Asia/Kathmandu (UTC+5:45)"
+    )
+
+    # The name reads with a space; the key that submits keeps the underscore.
+    search.fill("south georgia")
+    option = page.locator(".timezone-suggestion").first
+    expect(option).to_contain_text("Atlantic/South Georgia")
+    option.click()
+    expect(page.locator("input[name='timezone']")).to_have_value(
+        "Atlantic/South_Georgia"
+    )
+
+
+def test_the_list_keeps_its_place_when_offsets_arrive(page, live_server):
+    """The offsets reach the list after it is drawn, and they make every label
+    longer. On a narrow screen that wraps rows and grows the list by over a
+    thousand pixels, so the list has to re-find its place by row. Holding a count
+    of pixels instead would leave the chosen zone far below the view."""
+    page.set_viewport_size({"width": 360, "height": 900})
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1940-06-15")
+    page.fill("#birth_time", "12:00")
+    expect(page.locator(".timezone-detected")).to_contain_text("Europe/")
+
+    page.select_option("#timezone-mode", "list")
+    selected = page.locator(".timezone-suggestion.is-selected")
+    expect(selected).to_contain_text("Europe/Berlin")
+    expect(selected).to_contain_text("UTC")  # the offsets have landed
+    placement = page.evaluate("""() => {
+        const list = document.getElementById('timezone-listbox');
+        const selected = list.querySelector('.timezone-suggestion.is-selected');
+        return {
+            top: selected.getBoundingClientRect().top
+               - list.getBoundingClientRect().top,
+            height: list.clientHeight,
+        };
+    }""")
+    assert 0 <= placement["top"] <= placement["height"] - 10, (
+        f"the chosen zone sits {placement['top']}px down a {placement['height']}px list"
+    )
+
 
 def test_manual_coords_make_place_a_plain_text_field(page, live_server):
     # With manual coordinates on, the place field is plain text: no autocomplete

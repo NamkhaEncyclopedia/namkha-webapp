@@ -829,6 +829,36 @@ async def timezone_lookup(
     }
 
 
+@app.get("/timezone-offsets")
+async def timezone_offsets(
+    request: Request,
+    birth_date: date,
+    birth_time: time_of_day,
+):
+    """Every zone's UTC offset on the birth date, for the picker labels.
+
+    Separate from /timezone because the answer depends on the birth date alone.
+    /timezone declines until a birth place is known as well, and the picker has
+    to label its zones before that.
+
+    These offsets label a choice, but don't decide one. The zone the sheet uses
+    still comes from the ticket /timezone issued.
+    """
+    client = _client_ip(request)
+    if _timezone_rate_limited(client):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    birth_datetime = datetime.combine(birth_date, birth_time)
+    try:
+        # 418 zones, all from bundled tzdata that zoneinfo caches. Cheap enough
+        # to work out per request, so nothing is kept between them.
+        offsets = await run_in_threadpool(constants.zone_offsets_at, birth_datetime)
+    except ValueError as error:
+        # An out-of-range year reaches datetime before any zone is read.
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"offsets": offsets}
+
+
 if TEST_MODE_ENABLED:
     FIXTURES_DIR = BASE.parent / "tests" / "fixtures"
 

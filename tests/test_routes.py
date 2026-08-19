@@ -6,7 +6,7 @@ import logging
 import namkha_calculator as nc
 import pytest
 
-from app import main, notes, turnstile
+from app import constants, main, notes, turnstile
 from app.forms import FIELDS, RESOLVE_AGAIN_MESSAGE
 from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
 from app.timezone_tickets import read_ticket
@@ -722,4 +722,46 @@ def test_timezone_http_429_after_limit(client):
     response = None
     for _ in range(main.TIMEZONE_RATE_LIMIT + 1):
         response = client.get("/timezone", params=BERLIN_1985)
+    assert response.status_code == 429
+
+
+def test_timezone_offsets_are_for_the_birth_date(client):
+    """The picker labels every zone with its offset, and the offset has to be the
+    one that applied at the birth, not today's. Kathmandu moved from UTC+5:30 to
+    UTC+5:45 in 1986, so the two dates below disagree."""
+    early = client.get(
+        "/timezone-offsets", params={"birth_date": "1940-06-15", "birth_time": "12:00"}
+    )
+    late = client.get(
+        "/timezone-offsets", params={"birth_date": "2000-06-15", "birth_time": "12:00"}
+    )
+    assert early.status_code == 200
+    assert late.status_code == 200
+    assert early.json()["offsets"]["Asia/Kathmandu"] == "UTC+5:30"
+    assert late.json()["offsets"]["Asia/Kathmandu"] == "UTC+5:45"
+    # Every zone the picker offers is labelled, under the key the picker submits.
+    assert set(early.json()["offsets"]) == constants.ZONE_KEYS
+
+
+def test_timezone_offsets_reject_bad_input(client):
+    assert (
+        client.get("/timezone-offsets", params={"birth_date": "1985-06-15"}).status_code
+        == 422
+    )
+    assert (
+        client.get(
+            "/timezone-offsets",
+            params={"birth_date": "not-a-date", "birth_time": "12:00"},
+        ).status_code
+        == 422
+    )
+
+
+def test_timezone_offsets_http_429_after_limit(client):
+    """The offsets share /timezone's limiter, so the two cannot be used to get
+    around each other."""
+    params = {"birth_date": "1985-06-15", "birth_time": "12:00"}
+    response = None
+    for _ in range(main.TIMEZONE_RATE_LIMIT + 1):
+        response = client.get("/timezone-offsets", params=params)
     assert response.status_code == 429

@@ -116,25 +116,40 @@ METHODS = [
 
 def format_utc_offset(aware_datetime: datetime) -> str:
     """An aware datetime's UTC offset as 'UTC+5:45'. Bare, so each caller adds
-    its own punctuation; used for both the picker labels and the sheet."""
+    its own punctuation."""
     total = int(aware_datetime.utcoffset().total_seconds())  # type: ignore[union-attr]
     sign = "+" if total >= 0 else "-"
     hours, seconds = divmod(abs(total), 3600)
     return f"UTC{sign}{hours}:{seconds // 60:02d}"
 
 
-def _tz_label(zone_name: str) -> str:
-    """e.g. 'Asia/Kathmandu (UTC+5:45)'. Offset is the CURRENT one (DST included
-    if in effect now) -- a display hint in the picker, not the offset used for
-    the actual birth date, which the render computes separately."""
-    return f"{zone_name} ({format_utc_offset(datetime.now(nc.zone(zone_name)))})"
+def _tz_display_name(zone_name: str) -> str:
+    return zone_name.replace("_", " ")
 
 
 # Geographic zones from the library's bundled zone.tab: the canonical picker
 # set, without the legacy aliases the full tzdata tree also carries.
 TIMEZONES = [
-    (zone_name, _tz_label(zone_name)) for zone_name in sorted(set(nc.zone_keys()))
+    (zone_name, _tz_display_name(zone_name))
+    for zone_name in sorted(set(nc.zone_keys()))
 ]
+
+
+def zone_offsets_at(birth_datetime: datetime) -> dict[str, str]:
+    """Every zone's UTC offset on the birth date, keyed by zone name.
+
+    The picker shows these next to the names. The offset is worked out for the
+    birth date, so a birth in 1940 reads the offsets of 1940.
+    zoneinfo takes it from the local wall time, so summer time is already
+    counted where it was in force. In the hour that repeats when clocks go
+    back, this gives the earlier of the two offsets. Which one the calculation
+    uses is settled by the summer-time answer, through /timezone.
+    """
+    return {
+        zone_name: format_utc_offset(birth_datetime.replace(tzinfo=nc.zone(zone_name)))
+        for zone_name, _ in TIMEZONES
+    }
+
 
 # The same keys, for checking one that arrives on a request. Built from
 # TIMEZONES so the picker and the check cannot come apart.

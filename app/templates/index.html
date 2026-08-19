@@ -287,8 +287,8 @@
                        class="input-text"
                        required
                        x-ref="birthDate"
-                       @input="invalidateTimezone()"
-                       @change="fetchTimezone()">
+                       @input="invalidateTimezone(); invalidateZoneOffsets()"
+                       @change="fetchTimezone(); fetchZoneOffsets()">
                 <div class="input-columns">
                   <div>
                     <label for="birth_time" class="label-major">Local birth time:</label>
@@ -298,8 +298,8 @@
                            class="input-text"
                            required
                            x-ref="birthTime"
-                           @input="invalidateTimezone()"
-                           @change="fetchTimezone()">
+                           @input="invalidateTimezone(); invalidateZoneOffsets()"
+                           @change="fetchTimezone(); fetchZoneOffsets()">
                   </div>
                   <div>
                     <label for="timezone-mode">Birth time zone:</label>
@@ -603,6 +603,12 @@
         timezoneSuggestions: [],
         // The same zones as rows to render, with region headings mixed in.
         timezoneRows: [],
+        // Each zone's UTC offset on the birth date, keyed by zone name, from
+        // /timezone-offsets. Empty until the birth date and time are both set,
+        // and emptied again when either changes: a label is either the offset
+        // for the date in the form or no offset at all.
+        timezoneOffsets: {},
+        zoneOffsetsRequestId: 0,
         timezoneActiveIndex: -1,
         utcOffsetSign: '+',
         utcOffsetTime: '',
@@ -618,10 +624,10 @@
         init() {
           this.timezoneOptions = JSON.parse(
             document.getElementById('timezone-options').textContent
-          ).map(([key, label]) => ({
+          ).map(([key, name]) => ({
             key,
-            label,
-            normalized: label.toLowerCase().replaceAll('_', ' ').replaceAll('/', ' '),
+            name,
+            normalized: name.toLowerCase().replaceAll('/', ' '),
           }));
           // Switching to the list starts on the zone that was already detected,
           // so the user does not have to find it again. The search field starts
@@ -636,6 +642,7 @@
               this.timezoneQuery = '';
               this.showAllTimezones();
               this.revealChosenTimezone();
+              this.fetchZoneOffsets();
             }
             // Runs last, so a zone filled in above goes with the request.
             this.fetchTimezone();
@@ -880,7 +887,12 @@
               heading = region;
               rows.push({ key: 'region:' + region, region: region.replaceAll('_', ' ') });
             }
-            rows.push({ key: option.key, label: option.label, index });
+            const offset = this.timezoneOffsets[option.key];
+            rows.push({
+              key: option.key,
+              label: offset ? `${option.name} (${offset})` : option.name,
+              index,
+            });
           });
           this.timezoneRows = rows;
         },
@@ -920,13 +932,63 @@
           const list = this.$refs.timezoneList;
           const row = document.getElementById('timezone-option-' + this.timezoneActiveIndex);
           if (!list || !row) return;
+          const heading = list.querySelector('.timezone-group');
+          const headingHeight = heading ? heading.offsetHeight : 0;
           if (centered) {
             list.scrollTop = row.offsetTop - (list.clientHeight - row.offsetHeight) / 2;
-          } else if (row.offsetTop < list.scrollTop) {
-            list.scrollTop = row.offsetTop;
+          } else if (row.offsetTop - headingHeight < list.scrollTop) {
+            list.scrollTop = row.offsetTop - headingHeight;
           } else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
             list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
           }
+        },
+
+        // Forget the offsets shown in the list, as soon as the birth date or
+        // time changes. They were worked out for the old one.
+        invalidateZoneOffsets() {
+          this.timezoneOffsets = {};
+          this.zoneOffsetsRequestId += 1;
+          this.relabelTimezones();
+        },
+
+        // Ask /timezone-offsets, so the list can show what each zone stood at on
+        // the birth date. Only the date and time matter here: the birth place
+        // does not change any zone's offset.
+        async fetchZoneOffsets() {
+          if (this.timezoneMode !== 'list') return;
+          const birthDate = this.$refs.birthDate?.value;
+          const birthTime = this.$refs.birthTime?.value;
+          if (!birthDate || !birthTime) return;
+          this.zoneOffsetsRequestId += 1;
+          const requestId = this.zoneOffsetsRequestId;
+          try {
+            const params = new URLSearchParams({ birth_date: birthDate, birth_time: birthTime });
+            const response = await fetch(`/timezone-offsets?${params}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            if (requestId !== this.zoneOffsetsRequestId) return;  // superseded
+            this.timezoneOffsets = data.offsets;
+            this.relabelTimezones();
+          } catch (error) {
+            console.warn('Time zone offset lookup failed:', error);
+          }
+        },
+
+        // Rebuild the rows so the labels pick up the offsets, keeping the list
+        // where the reader left it. Only the labels change, never the order.
+        relabelTimezones() {
+          if (this.timezoneMode !== 'list') return;
+          const list = this.$refs.timezoneList;
+          if (!list) { this.buildTimezoneRows(); return; }
+          const rows = [...list.querySelectorAll('.timezone-suggestion')];
+          const anchor = rows.find(row => row.offsetTop + row.offsetHeight > list.scrollTop);
+          const anchorId = anchor ? anchor.id : '';
+          const anchorGap = anchor ? anchor.offsetTop - list.scrollTop : 0;
+          this.buildTimezoneRows();
+          this.$nextTick(() => {
+            const moved = document.getElementById(anchorId);
+            if (moved) list.scrollTop = moved.offsetTop - anchorGap;
+          });
         },
 
         onTimezoneKeydown(event) {
@@ -992,7 +1054,6 @@
             longitude: data.longitude,
             timezoneMode: data.utc_offset ? 'offset' : (data.timezone ? 'list' : 'auto'),
             timezone: data.timezone || '',
-            timezoneQuery: data.timezone || '',
             utcOffsetSign: data.utc_offset ? data.utc_offset[0] : '+',
             utcOffsetTime: data.utc_offset ? data.utc_offset.slice(1) : '',
             onSummerTime: data.on_summer_time || '',
@@ -1001,8 +1062,11 @@
           this.$refs.birthDate.value = data.birth_date;
           this.$refs.birthTime.value = data.birth_time;
           // Fixtures carry no resolved zone: it would be stale the moment the
-          // file was written. Ask for one now, as the form is complete.
+          // file was written. Ask for one now, as the form is complete. Setting
+          // the date and time above fires no change event, so both asks are made
+          // here rather than by the fields.
           this.fetchTimezone();
+          this.fetchZoneOffsets();
         },
       };
     }
