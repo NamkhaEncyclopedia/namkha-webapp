@@ -76,7 +76,7 @@ def test_pressing_calculate_straight_after_an_edit_sends_a_zone(page, live_serve
     ticket = page.locator("input[name='timezone_ticket']")
     resolved_zone(ticket)
 
-    # Retype a coordinate and press Calculate without leaving the field first.
+    # Re-enter a coordinate and press Calculate without leaving the field first.
     page.fill("#longitude-ui", "13.4070")
     page.locator("button[type='submit']").click()
     expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
@@ -221,7 +221,7 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     page.fill("#birth_date", "1985-06-15")
     page.fill("#birth_time", "12:00")
     # Disabled UI inputs aren't serialized; the hidden :value mirrors are what
-    # posts. Typed coordinates are rounded to four decimals on leaving the
+    # posts. Entered coordinates are rounded to four decimals on leaving the
     # field, the same as the ones a place from the list brings.
     expect(page.locator("input[name='latitude']")).to_have_value("52.5200")
     expect(page.locator("input[name='longitude']")).to_have_value("13.4050")
@@ -288,14 +288,14 @@ def test_status_line_shows_the_name_the_sheet_will_use(page, live_server):
 
 
 def test_timezone_search_without_selection_blocks_submit(page, live_server):
-    # Typing without committing a zone must not silently fall back to automatic:
+    # A search without committing a zone must not silently fall back to automatic:
     # the combobox carries a custom validity error until a zone is chosen.
     page.goto(live_server)
     page.select_option("#timezone-mode", "list")
     search = page.locator("#timezone-search")
     search.fill("nowhere")
     assert not search.evaluate("el => el.checkValidity()")
-    # An exact key typed by hand commits on blur and clears the error.
+    # An exact key entered by hand commits on blur and clears the error.
     search.fill("Asia/Kathmandu")
     search.blur()
     expect(page.locator("input[name='timezone']")).to_have_value("Asia/Kathmandu")
@@ -355,7 +355,7 @@ def test_timezone_list_is_ready_before_any_search(page, live_server):
 
 def test_manual_coords_make_place_a_plain_text_field(page, live_server):
     # With manual coordinates on, the place field is plain text: no autocomplete
-    # search fires, and whatever is typed submits as the location name verbatim.
+    # search fires, and whatever is entered submits as the location name verbatim.
     # Photon is stubbed to return a hit, so a regressed guard would surface a
     # suggestion (and fail the count assertion) instead of silently passing.
     page.route(
@@ -427,7 +427,7 @@ _RELEASE_REPLIES = """
 
 def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
     """A pre-1970 date searches the historical border maps, so its reply can
-    arrive after that of a modern date typed later. The older answer must be
+    arrive after that of a modern date entered later. The older answer must be
     dropped, not written over the newer one."""
     page.add_init_script(_HOLD_TIMEZONE_REPLIES)
     page.goto(live_server)

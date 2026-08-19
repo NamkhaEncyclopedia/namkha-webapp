@@ -188,7 +188,7 @@
                          class="input-text"
                          autocomplete="off"
                          maxlength="{{ max_location_name_length }}"
-                         :placeholder="manualCoords ? 'Place name (optional)' : 'Start typing a place…'"
+                         :placeholder="manualCoords ? 'Place name (optional)' : 'Search for a place…'"
                          :role="manualCoords ? null : 'combobox'"
                          :aria-controls="manualCoords ? null : 'place-listbox'"
                          :aria-autocomplete="manualCoords ? null : 'list'"
@@ -593,7 +593,7 @@
         timezoneNotes: [],
         // Counts lookups so a slow reply cannot overwrite a newer one. A
         // pre-1970 date searches the historical border maps and can take much
-        // longer than the modern date typed after it.
+        // longer than the modern date entered after it.
         timezoneRequestId: 0,
         // The lookup now running, so a submit can wait for it. Null when none is.
         timezonePending: null,
@@ -1032,7 +1032,7 @@
       <!-- Page turners: shown only when the result has more than one page, and only
          on pointer devices — touch swipes left/right instead. -->
       <!-- Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
-         so a text arrow looks pushed down however the button centres it. -->
+         so a text arrow looks pushed down however the button centers it. -->
       <button type="button"
               class="lightbox-btn lightbox-nav lightbox-nav-prev"
               data-lightbox-page="prev"

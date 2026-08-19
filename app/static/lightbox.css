@@ -109,7 +109,7 @@
   outline: 3px solid var(--radio-focus-ring);
   outline-offset: 2px;
 }
-/* Round page turners, vertically centred. The left/right insets here are only a
+/* Round page turners, vertically centered. The left/right insets here are only a
    fallback: lightbox.js sets them from the fitted sheet width, so the buttons sit
    just outside its edges instead of out at the viewport rim. */
 .lightbox-nav {

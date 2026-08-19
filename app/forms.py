@@ -120,7 +120,7 @@ def build_request(form) -> NamkhaRequest:
         raise ValueError("Latitude and longitude must be numbers.") from exc
 
     # `location_name` is the place field text: the autocomplete label, or whatever
-    # the user typed in manual-coordinate mode. Blank -> no name (bare coordinates).
+    # the user entered in manual-coordinate mode. Blank -> no name (bare coordinates).
     place_name = (form.get("location_name") or "").strip() or None
     if place_name is not None and len(place_name) > MAX_LOCATION_NAME_LENGTH:
         raise ValueError(

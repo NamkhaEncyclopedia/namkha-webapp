@@ -198,7 +198,7 @@ class TestTheZoneChoiceMustMatch:
     would sail through and print a sheet for Kathmandu.
 
     There are three ways to choose, so three rules. A zone picked from the list
-    must still be in `timezone`. An offset typed by hand must still be in
+    must still be in `timezone`. An offset entered by hand must still be in
     `utc_offset`. A zone that came from the birth place must leave both empty.
     """
 
