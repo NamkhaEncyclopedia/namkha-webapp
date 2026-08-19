@@ -1157,19 +1157,19 @@ files = [
 
 [[package]]
 name = "namkha-calculator"
-version = "0.1.0a4"
+version = "0.1.0a5"
 description = "Calculate Tibetan Namkha thread-cross color schemes in Chögyal Namkhai Norbu tradition."
 optional = false
 python-versions = "<4.0,>=3.12"
 groups = ["main"]
 files = [
-    {file = "namkha_calculator-0.1.0a4-py3-none-any.whl", hash = "sha256:aa5bab91224fea51b784f67c56cf5bcf8d07ef9c224d349d048b92a9cc1caa29"},
-    {file = "namkha_calculator-0.1.0a4.tar.gz", hash = "sha256:0af6ddc32570e781ba1712f176fdfb68e0054c918a876f7f7ddc621d8c9e61a6"},
+    {file = "namkha_calculator-0.1.0a5-py3-none-any.whl", hash = "sha256:4cd6652a9ffd068b65c1a7ad5400bd23cde4f838e1716e82dec315fa01fea273"},
+    {file = "namkha_calculator-0.1.0a5.tar.gz", hash = "sha256:961f598d9a1a0b25cead950f7ac48aafdebfaf2f529636b0299e92fc2c71553e"},
 ]
 
 [package.dependencies]
 skyfield = ">=1.49,<2.0"
-timezonefinder = ">=6.5"
+timezonefinder = ">=8.2.4,<9.0.0"
 
 [[package]]
 name = "nodeenv"
@@ -2301,4 +2301,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "28173c587a1f31a911f41ada2ba9e0ef73bc095b4f6b31ac0c548b24088200f0"
+content-hash = "ed6c8c07b0b457101b9f7e37456b8a595603532fbc7cb926f536a870779bc409"

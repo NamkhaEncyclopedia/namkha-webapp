@@ -1,13 +1,13 @@
 [project]
 name = "namkha-webapp"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "Web app to calculate a Namkha and organize results in a downloadable calculation sheet"
 authors = [{ name = "Namkha Encyclopedia" }]
 license = "GPL-3.0-or-later"
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
 dependencies = [
-    "namkha-calculator (>=0.1.0a4)",
+    "namkha-calculator (>=0.1.0a5)",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
