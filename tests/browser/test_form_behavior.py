@@ -13,6 +13,7 @@ import namkha_calculator as nc
 import pytest
 from playwright.sync_api import expect
 
+from app import constants
 from app.timezone_tickets import _tickets, read_ticket
 
 pytestmark = pytest.mark.browser
@@ -227,7 +228,7 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     ticket = page.locator("input[name='timezone_ticket']")
     assert resolved_zone(ticket).provenance is nc.TimezoneProvenance.LOCATION_DERIVED
 
-    # List mode: fuzzy search over the library's zone list, selection commits.
+    # List mode: fuzzy search narrows the library's zone list, selection commits.
     page.select_option("#timezone-mode", "list")
     search = page.locator("#timezone-search")
     expect(search).to_be_visible()
@@ -235,7 +236,12 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     suggestion = page.locator(".timezone-suggestion").first
     expect(suggestion).to_contain_text("Europe/Berlin")
     suggestion.click()
-    expect(search).to_have_value("Europe/Berlin")
+    # The search field filters the list, it does not hold the choice: picking a
+    # zone empties it and marks that zone in the full list.
+    expect(search).to_have_value("")
+    expect(page.locator(".timezone-suggestion.is-selected")).to_contain_text(
+        "Europe/Berlin"
+    )
     expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
     expect(page.locator("input[name='utc_offset']")).to_have_value("")
     zone = resolved_zone(ticket)
@@ -294,6 +300,57 @@ def test_timezone_search_without_selection_blocks_submit(page, live_server):
     search.blur()
     expect(page.locator("input[name='timezone']")).to_have_value("Asia/Kathmandu")
     assert search.evaluate("el => el.checkValidity()")
+
+
+def test_timezone_list_is_ready_before_any_search(page, live_server):
+    """The mode is called "Choose from list", so a list has to be on screen the
+    moment it is chosen. It starts on the zone already detected, with every other
+    zone under it to scroll through, and the search field only narrows it."""
+    zone_count = len(constants.TIMEZONES)
+    region_count = len({key.split("/")[0] for key, _ in constants.TIMEZONES})
+
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
+    expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
+
+    page.select_option("#timezone-mode", "list")
+    search = page.locator("#timezone-search")
+    # The search field is empty, and every zone is already listed under its
+    # region heading.
+    expect(search).to_have_value("")
+    expect(page.locator(".timezone-suggestion")).to_have_count(zone_count)
+    expect(page.locator(".timezone-group")).to_have_count(region_count)
+    expect(page.locator(".timezone-group").first).to_have_text("Africa")
+    # The detected zone is the marked one, so it can be confirmed or moved to a
+    # neighbor rather than searched for again.
+    expect(page.locator(".timezone-suggestion.is-selected")).to_contain_text(
+        "Europe/Berlin"
+    )
+    expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
+
+    # Escape clears the search, and not the choice. Picking a zone leaves the focus
+    # in the search field, so Escape is easy to press right after.
+    search.press("Escape")
+    expect(page.locator(".timezone-suggestion.is-selected")).to_contain_text(
+        "Europe/Berlin"
+    )
+    expect(page.locator("input[name='timezone']")).to_have_value("Europe/Berlin")
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).key == "Europe/Berlin"
+
+    # A search narrows that same list, and the headings go: the zones are then
+    # ordered by how well they match, which cuts across the regions.
+    search.fill("kathm")
+    expect(page.locator(".timezone-suggestion").first).to_contain_text("Asia/Kathmandu")
+    expect(page.locator(".timezone-group")).to_have_count(0)
+    # Emptying the search brings the whole list back.
+    search.fill("")
+    expect(page.locator(".timezone-suggestion")).to_have_count(zone_count)
+    expect(page.locator(".timezone-group")).to_have_count(region_count)
 
 
 def test_manual_coords_make_place_a_plain_text_field(page, live_server):

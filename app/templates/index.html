@@ -345,32 +345,41 @@
                            id="timezone-search"
                            class="input-text"
                            autocomplete="off"
-                           placeholder="Start typing a time zone…"
+                           placeholder="Search time zones"
                            role="combobox"
                            aria-controls="timezone-listbox"
                            aria-autocomplete="list"
-                           :aria-expanded="timezoneSuggestions.length > 0"
+                           aria-expanded="true"
                            :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
                            x-model="timezoneQuery"
                            x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
                            @input="searchTimezones()"
                            @keydown="onTimezoneKeydown($event)"
                            @blur="commitTimezoneOnBlur()">
-                    <ul class="suggestion-list"
+                    <!-- The list stays on screen for as long as this mode is
+                         chosen. The search field narrows it in place; it never
+                         opens or closes. -->
+                    <ul class="timezone-list"
                         id="timezone-listbox"
                         role="listbox"
-                        x-show="timezoneSuggestions.length"
-                        x-cloak>
-                      <template x-for="(option, index) in timezoneSuggestions" :key="option.key">
-                        <li class="timezone-suggestion"
-                            role="option"
-                            :id="'timezone-option-' + index"
-                            :aria-selected="index === timezoneActiveIndex"
-                            :class="{ 'is-active': index === timezoneActiveIndex }"
-                            @mousedown.prevent="selectTimezone(option)">
-                          <span x-text="option.label"></span>
-                        </li>
+                        aria-label="Time zones"
+                        x-ref="timezoneList">
+                      <!-- timezoneRows holds headings and zones. A row with a
+                           region is a heading; every other row is a zone.
+                           Screen readers skip the headings, because each zone
+                           key already starts with its region. -->
+                      <template x-for="row in timezoneRows" :key="row.key">
+                        <li :class="row.region ? 'timezone-group' : { 'timezone-suggestion': true, 'is-active': row.index === timezoneActiveIndex, 'is-selected': row.key === timezone, }"
+                            :role="row.region ? 'presentation' : 'option'"
+                            :aria-hidden="row.region ? 'true' : null"
+                            :id="row.region ? null : 'timezone-option-' + row.index"
+                            :aria-selected="row.region ? null : row.key === timezone"
+                            @mousedown.prevent="if (!row.region) selectTimezone(row)"
+                            x-text="row.region || row.label"></li>
                       </template>
+                      <li class="timezone-empty"
+                          x-show="!timezoneRows.length"
+                          x-text="'No time zone matches “' + timezoneQuery.trim() + '”.'"></li>
                     </ul>
                   </div>
                 </template>
@@ -590,7 +599,10 @@
         timezonePending: null,
         timezone: '',
         timezoneQuery: '',
+        // The zones on offer, best match first. The arrow keys walk this one.
         timezoneSuggestions: [],
+        // The same zones as rows to render, with region headings mixed in.
+        timezoneRows: [],
         timezoneActiveIndex: -1,
         utcOffsetSign: '+',
         utcOffsetTime: '',
@@ -611,13 +623,19 @@
             label,
             normalized: label.toLowerCase().replaceAll('_', ' ').replaceAll('/', ' '),
           }));
-          // Switching to the list fills in the zone that was already detected,
-          // so the user does not have to find it again. Every switch also asks
-          // for the zone again, because each mode sends different fields.
+          // Switching to the list starts on the zone that was already detected,
+          // so the user does not have to find it again. The search field starts
+          // empty, so the list shows every zone with that one marked. Every
+          // switch also asks for the zone again, because each mode sends
+          // different fields.
           this.$watch('timezoneMode', mode => {
-            if (mode === 'list' && !this.timezone && !this.timezoneQuery.trim() && this.detectedTimezone) {
-              this.timezone = this.detectedTimezone;
-              this.timezoneQuery = this.detectedTimezone;
+            if (mode === 'list') {
+              if (!this.timezone && this.detectedTimezone) {
+                this.timezone = this.detectedTimezone;
+              }
+              this.timezoneQuery = '';
+              this.showAllTimezones();
+              this.revealChosenTimezone();
             }
             // Runs last, so a zone filled in above goes with the request.
             this.fetchTimezone();
@@ -823,58 +841,108 @@
           }
         },
 
+        // Offer every zone, leaving the chosen one alone. This is how the list
+        // stands whenever the search field is empty.
+        showAllTimezones() {
+          this.timezoneSuggestions = this.timezoneOptions;
+          this.buildTimezoneRows();
+        },
+
         searchTimezones() {
-          this.timezone = '';  // typing invalidates the committed choice
+          this.timezone = '';  // entering text invalidates the committed choice
           this.invalidateTimezone();
           this.timezoneActiveIndex = -1;
           const query = this.timezoneQuery.trim().toLowerCase()
             .replaceAll('_', ' ').replaceAll('/', ' ');
-          if (!query) { this.timezoneSuggestions = []; return; }
-          const scored = this.timezoneOptions
-            .map(option => [timezoneMatchScore(option.normalized, query), option])
-            .filter(([score]) => score > 0)
-            .sort((a, b) => b[0] - a[0] || a[1].key.localeCompare(b[1].key));
-          this.timezoneSuggestions = scored.slice(0, 8).map(([, option]) => option);
+          if (!query) {
+            this.showAllTimezones();
+          } else {
+            this.timezoneSuggestions = this.timezoneOptions
+              .map(option => [timezoneMatchScore(option.normalized, query), option])
+              .filter(([score]) => score > 0)
+              .sort((a, b) => b[0] - a[0] || a[1].key.localeCompare(b[1].key))
+              .map(([, option]) => option);
+            this.buildTimezoneRows();
+          }
+          if (this.$refs.timezoneList) this.$refs.timezoneList.scrollTop = 0;
+        },
+
+        // Turn timezoneSuggestions into the rows the list renders. A search
+        // orders the zones by how well they match, so headings would break that
+        // order: they are added only while the search field is empty.
+        buildTimezoneRows() {
+          const grouped = !this.timezoneQuery.trim();
+          const rows = [];
+          let heading = '';
+          this.timezoneSuggestions.forEach((option, index) => {
+            const region = option.key.split('/')[0];
+            if (grouped && region !== heading) {
+              heading = region;
+              rows.push({ key: 'region:' + region, region: region.replaceAll('_', ' ') });
+            }
+            rows.push({ key: option.key, label: option.label, index });
+          });
+          this.timezoneRows = rows;
         },
 
         selectTimezone(option) {
           this.timezone = option.key;
-          this.timezoneQuery = option.key;
-          this.timezoneSuggestions = [];
-          this.timezoneActiveIndex = -1;
+          // The search field filters the list, it does not show the choice.
+          // Emptying it brings the whole list back with the zone marked, so the
+          // zones around it can be compared.
+          this.timezoneQuery = '';
+          this.showAllTimezones();
+          this.revealChosenTimezone();
           this.fetchTimezone();
         },
 
         commitTimezoneOnBlur() {
-          this.timezoneSuggestions = [];
-          this.timezoneActiveIndex = -1;
           if (this.timezone) return;
-          const typed = this.timezoneQuery.trim().toLowerCase();
+          const entered = this.timezoneQuery.trim().toLowerCase();
           const exact = this.timezoneOptions.find(
-            option => option.key.toLowerCase() === typed
+            option => option.key.toLowerCase() === entered
           );
-          if (exact) {
-            this.timezone = exact.key;
-            this.timezoneQuery = exact.key;
-            this.fetchTimezone();
+          if (exact) this.selectTimezone(exact);
+        },
+
+        // Scroll the chosen zone to the middle of the list, so the zones before
+        // and after it are visible too. The rows are built first, in the same
+        // call, so the scrolling waits for them to render.
+        revealChosenTimezone() {
+          this.timezoneActiveIndex = this.timezoneSuggestions
+            .findIndex(option => option.key === this.timezone);
+          this.$nextTick(() => this.scrollToActiveTimezone(true));
+        },
+
+        // Move the list to the active row. Centered on request, otherwise by the
+        // least that brings the row inside. Only the list scrolls, never the page.
+        scrollToActiveTimezone(centered) {
+          const list = this.$refs.timezoneList;
+          const row = document.getElementById('timezone-option-' + this.timezoneActiveIndex);
+          if (!list || !row) return;
+          if (centered) {
+            list.scrollTop = row.offsetTop - (list.clientHeight - row.offsetHeight) / 2;
+          } else if (row.offsetTop < list.scrollTop) {
+            list.scrollTop = row.offsetTop;
+          } else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) {
+            list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
           }
         },
 
         onTimezoneKeydown(event) {
-          if (!this.timezoneSuggestions.length) {
-            if (event.key === 'ArrowDown') this.searchTimezones();
-            return;
-          }
+          if (!this.timezoneSuggestions.length) return;
           switch (event.key) {
             case 'ArrowDown':
               event.preventDefault();
               this.timezoneActiveIndex =
                 (this.timezoneActiveIndex + 1) % this.timezoneSuggestions.length;
+              this.scrollToActiveTimezone(false);
               break;
             case 'ArrowUp':
               event.preventDefault();
               this.timezoneActiveIndex =
                 (this.timezoneActiveIndex - 1 + this.timezoneSuggestions.length) % this.timezoneSuggestions.length;
+              this.scrollToActiveTimezone(false);
               break;
             case 'Enter':
               if (this.timezoneActiveIndex >= 0) {
@@ -883,8 +951,12 @@
               }
               break;
             case 'Escape':
-              this.timezoneSuggestions = [];
-              this.timezoneActiveIndex = -1;
+              // Clear the search and show every zone again. Not through
+              // searchTimezones: that one drops the chosen zone, and Escape
+              // undoes the search.
+              this.timezoneQuery = '';
+              this.showAllTimezones();
+              this.revealChosenTimezone();
               break;
           }
         },
