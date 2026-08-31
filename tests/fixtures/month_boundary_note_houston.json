@@ -1,0 +1,12 @@
+{
+  "name": "Month Boundary",
+  "gender": "MALE",
+  "birth_date": "1973-12-25",
+  "birth_time": "06:53",
+  "location_name": "Houston, USA",
+  "timezone": "America/Chicago",
+  "latitude": "29.7604",
+  "longitude": "-95.3698",
+  "namkha_type": "MONTH",
+  "method": "CLASSIC"
+}
