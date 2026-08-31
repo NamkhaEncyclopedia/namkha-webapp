@@ -144,19 +144,28 @@
               <div>
                 <label class="label-major">Namkha type:</label>
                 <div class="radio-toggle">
+                  {# TODO: drop `frozen` once the library calculates DAY and HOUR; the gate is then method-based alone. #}
+                  {# CNNR calculates the year alone, so it switches MONTH off. The $watch above moves the choice back to YEAR. #}
                   {% for value, text in namkha_types %}
+                    {% set frozen = value in ('DAY', 'HOUR') %}
+                    {% set disabled_when = 'true' if frozen else ("method === 'CNNR'" if value != 'YEAR' else 'false') %}
                     <div class="radio-button">
                       <input type="radio"
                              id="type-{{ value }}"
                              name="namkha_type"
                              value="{{ value }}"
                              x-model="namkhaType"
-                             {# TODO: unfreeze MONTH-DAY-HOUR once library calculation functions for those types are ready; revert to method-based gating only #}
-                             :disabled="'{{ value }}' !== 'YEAR'"
+                             :disabled="{{ disabled_when }}"
                              {% if value == 'YEAR' %}checked{% endif %}
                              required>
                       <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
-                      {% if value != 'YEAR' %}<span class="coming-soon-cover" aria-hidden="true">Coming soon</span>{% endif %}
+                      {# A cover appears on hover and says why the type is switched off. #}
+                      {% if frozen %}
+                        <span class="radio-cover" aria-hidden="true">Coming soon</span>
+                      {% elif value != 'YEAR' %}
+                        {# No x-cloak: the cover is already invisible until hover, and hiding it before Alpine starts would leave MONTH with no reason shown. #}
+                        <span class="radio-cover" aria-hidden="true" x-show="method === 'CNNR'">Classic only</span>
+                      {% endif %}
                     </div>
                   {% endfor %}
                 </div>

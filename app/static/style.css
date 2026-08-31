@@ -494,7 +494,7 @@ h1.title {
   display: flex;
   position: relative;
 }
-.coming-soon-cover {
+.radio-cover {
   position: absolute;
   inset: 0;
   display: flex;
@@ -508,7 +508,7 @@ h1.title {
   transition: opacity 0.15s ease;
   pointer-events: none;
 }
-.radio-button:hover .coming-soon-cover {
+.radio-button:hover .radio-cover {
   opacity: 1;
 }
 .radio-toggle input[type="radio"] {
