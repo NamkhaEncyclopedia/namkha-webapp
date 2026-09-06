@@ -1,18 +1,73 @@
 <section id="about" class="about">
-  <h2>About</h2>
-  <p class="inline-tooltip" role="alert">
+  <h2>About{% include "_heading_cloud.html" %}</h2>
+  <p class="warning-text" role="alert">
     Please keep in mind that this app is still young and being tested. Before you
     make a real Namkha, have the results checked by someone experienced in these
     calculations.
   </p>
   <p>
-    A <a href="https://en.wikipedia.org/wiki/Namkha">Namkha</a> is a traditional
-    Tibetan thread-cross: colored threads wound around wooden sticks in a pattern
-    that is individual to each person, based on Tibetan astrology.
-    This app calculates the colors for a Namkha in the tradition of
-    <a href="https://en.wikipedia.org/wiki/Namkhai_Norbu">Chögyal Namkhai Norbu
-      Rinpoche</a>.
+    A <a href="https://en.wikipedia.org/wiki/Namkha">Namkha</a> is a shamanic
+    astrological thread-cross that comes from Bön, the pre-Buddhist tradition of
+    Tibet. Thread-crosses serve a range of purposes, among them harmonization
+    and protection.
+    <a href="https://en.wikipedia.org/wiki/Namkhai_Norbu">Chögyal Namkhai Norbu</a>
+    rediscovered a method for calculating and constructing such thread-crosses
+    for the benefit of all sentient beings. Their activity rests on the
+    principles of Tibetan astrology, and they are empowered with a corresponding
+    ritual.
   </p>
+  <p>
+    The Namkha Calculator performs four types of personal Namkha calculation,
+    one for each astrological period of a birth:
+  </p>
+  <ul>
+    <li>for the Tibetan hour of birth</li>
+    <li>for the Tibetan day of birth</li>
+    <li>for the Tibetan month of birth</li>
+    <li>for the Tibetan year of birth</li>
+  </ul>
+  <p>
+    The year and the month Namkha are available now; the day and the hour Namkha
+    are coming soon.
+  </p>
+  <p>
+    This is the first program to calculate these types of Namkha, which are
+    described in <em>Namkha: Harmonizing Energy of the Elements</em> by Chögyal
+    Namkhai Norbu. It brings the full potential of the method, and supports
+    practitioners and everyone else with an interest in it.
+  </p>
+  <p>
+    The program was created by two people: Anna Weiss, a Namkha expert and
+    Tibetan astrologer who has worked directly with Shang Shung Publications
+    Italy, and Simon Weiss, who is responsible for the technical side of it.
+  </p>
+  <p>
+    It takes account of the developments that followed the publication of the
+    latest edition of <em>Namkha: Harmonizing Energy of the Elements</em> in
+    2022:
+  </p>
+  <ul>
+    <li>separate calculations for women and for men</li>
+    <li>
+      four types of Namkha, one for each of the four astrological periods of
+      birth
+    </li>
+  </ul>
+  <p>The program is based on:</p>
+  <ul>
+    <li>
+      <em>Namkha: Harmonizing Energy of the Elements</em> by Chögyal Namkhai
+      Norbu (Shang Shung Publications, 2022)
+    </li>
+    <li>
+      <em>Jung-We Khyil-Khor: Mandala of the Five Elements</em> by Migmar
+      Tsering (2020)
+    </li>
+    <li>
+      <em>Tibetan Calendar Mathematics</em> by Svante Janson (2014)
+    </li>
+  </ul>
+  <h3>How to use the Namkha Calculator</h3>
   <p>
     Fill in the date, time, and place of birth, then press the Calculate button
     (if you are unsure of the birth time, enter an approximate time or simply noon).
@@ -29,9 +84,14 @@
     of course set it yourself.
   </p>
   <p>
-    The app is free to use. It is made with care by
+    The app is free to use. Its
+    <a href="https://github.com/NamkhaEncyclopedia/namkha-webapp"
+       target="_blank"
+       rel="noopener noreferrer">source code</a> is public as well, so anyone
+    can improve it or build on it. It is made with care by
     <a href="https://namkha-encyclopedia.com/"
        target="_blank"
        rel="noopener noreferrer">Namkha Encyclopedia</a>.
   </p>
+  {% include "_to_top.html" %}
 </section>
