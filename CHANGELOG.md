@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [0.1.0a4] – 2026-09-06
+
+### Added
+
+- Month Namkha calculation, under the Classic method. A switched-off type now says on hover
+  why it is off.
+- A fuller About section: what a Namkha is, the four types, the sources, the
+  authors, and a link to the source code.
+
+### Changed
+
+- Requires namkha-calculator 0.1.0a6.
+- Clouds behind the page. About, Support and Privacy are white panels.
+
+### Fixed
+
+- Dropdown fields no longer take the browser's grey background.
+
 ## [0.1.0a3] – 2026-08-19
 
 ### Added
@@ -73,6 +91,7 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 Initial alpha release: web form for Namkha calculation, rendering a typeset sheet
 with an inline thread-cross illustration and a downloadable PDF.
 
+[0.1.0a4]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a3...v0.1.0a4
 [0.1.0a3]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a2...v0.1.0a3
 [0.1.0a2]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a1...v0.1.0a2
 [0.1.0a1]: https://github.com/NamkhaEncyclopedia/namkha-webapp/releases/tag/v0.1.0a1

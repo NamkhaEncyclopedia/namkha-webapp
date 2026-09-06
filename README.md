@@ -33,6 +33,7 @@ library.
 
 ## Features
 
+- **Namkha types** – year under the Chögyal Namkhai Norbu method, year and month under the Classic method. Day and hour are coming soon.
 - **User-friendly interface** – a simple form for entering the subject's birth data (with autocomplete, help tips and formatting). The result
   shown on the page is easy to view and download.
 - **Time zone handling** – by default the time zone is derived from the birth place
