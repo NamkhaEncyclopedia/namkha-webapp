@@ -606,3 +606,54 @@ def test_edits_in_a_row_ask_once(page, live_server):
     assert page.evaluate("() => window.__heldTimezoneReplies.length") == 1
     held = page.evaluate("() => window.__heldTimezoneReplies[0].url")
     assert "birth_date=1987-06-15" in held
+
+
+def test_the_birth_time_field_keeps_the_picker_by_default(page, live_server):
+    """A time input opens the phone's picker, which is the easier way to enter a
+    time. Only the browsers that crash on it get the plain field."""
+    page.goto(live_server)
+    expect(page.locator("#birth_time")).to_have_attribute("type", "time")
+
+
+def test_time_input_text_turns_the_birth_time_field_into_plain_text(page, live_server):
+    """Instagram's and Facebook's in-app browsers close down when the time picker
+    opens. There the field is text, so tapping it opens the keyboard instead. The
+    query parameter forces that form in any browser, so it can be tested here."""
+    page.goto(f"{live_server}?time_input=text")
+    expect(page.locator("#birth_time")).to_have_attribute("type", "text")
+
+
+@pytest.mark.parametrize("entered", ["9:30", "0930", "930", "09:30"])
+def test_the_plain_birth_time_field_reaches_hh_mm(page, live_server, entered):
+    """The server reads the birth time as HH:MM. A time picker can only give that
+    shape, a text field can give several. The numeric keypad on a phone has no
+    colon key, so a bare "930" has to arrive as "09:30" too."""
+    page.goto(f"{live_server}?time_input=text")
+    # Wait for the swap: a fill of "9:30" into the time input it starts as fails.
+    expect(page.locator("#birth_time")).to_have_attribute("type", "text")
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", entered)
+    page.locator("#birth_time").blur()  # fill() alone fires no change event
+
+    expect(page.locator("#birth_time")).to_have_value("09:30")
+
+
+def test_the_plain_birth_time_field_resolves_a_zone(page, live_server):
+    """A birth time entered as plain text ends in a ticket like any other.
+
+    Ensures proper processing order of time text field data.
+    """
+    page.goto(f"{live_server}?time_input=text")
+    expect(page.locator("#birth_time")).to_have_attribute("type", "text")
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "930")
+    page.locator("#birth_time").blur()
+
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).key == "Europe/Berlin"

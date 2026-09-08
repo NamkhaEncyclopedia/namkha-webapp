@@ -301,14 +301,20 @@
                 <div class="input-columns">
                   <div>
                     <label for="birth_time" class="label-major">Local birth time:</label>
-                    <input type="time"
+                    <!-- Time picker as plain text option is added to prevent Instagram internal browser from crashing (see wantsPlainTimeInput() for details). -->
+                    <input type="text"
+                           :type="plainTimeInput ? 'text' : 'time'"
                            id="birth_time"
                            name="birth_time"
                            class="input-text"
                            required
                            x-ref="birthTime"
+                           :inputmode="plainTimeInput ? 'numeric' : null"
+                           :placeholder="plainTimeInput ? 'HH:MM' : null"
+                           :pattern="plainTimeInput ? '([01][0-9]|2[0-3]):[0-5][0-9]' : null"
+                           :title="plainTimeInput ? 'Hours and minutes on a 24-hour clock, like 09:30 or 0930' : null"
                            @input="invalidateTimezone(); invalidateZoneOffsets()"
-                           @change="fetchTimezone(); fetchZoneOffsets()">
+                           @change="padTimeText(); fetchTimezone(); fetchZoneOffsets()">
                   </div>
                   <div>
                     <label for="timezone-mode">Birth time zone:</label>
@@ -573,6 +579,19 @@
       return 1;
     }
 
+    // Whether the birth time field must stay clear of the phone's time picker.
+    // Instagram's and Facebook's in-app browsers close down when that picker
+    // opens, on iOS and on Android. Every other browser keeps the picker, which
+    // is the easier way to enter a time on a phone.
+    // The `time_input` query parameter forces one form or the other, so the
+    // plain field can be tried out in an ordinary browser.
+    function wantsPlainTimeInput() {
+      const forced = new URLSearchParams(window.location.search).get('time_input');
+      if (forced === 'text') return true;
+      if (forced === 'native') return false;
+      return /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
+    }
+
     // Every field Reset restores. timezoneOptions is deliberately NOT here: it
     // is loaded once in init() and must survive a reset.
     function initialFormState() {
@@ -629,8 +648,11 @@
       return {
         ...initialFormState(),
         timezoneOptions: [],
+        // The browser decides this once, so Reset must not touch it.
+        plainTimeInput: false,
 
         init() {
+          this.plainTimeInput = wantsPlainTimeInput();
           this.timezoneOptions = JSON.parse(
             document.getElementById('timezone-options').textContent
           ).map(([key, name]) => ({
@@ -1036,6 +1058,20 @@
         utcOffsetExceedsRange() {
           const match = this.utcOffsetTime.match(/^(\d{1,2}):(\d{2})$/);
           return match !== null && Number(match[1]) * 60 + Number(match[2]) > 16 * 60;
+        },
+
+        // Put the plain field into HH:MM shape on change: "930", "0930" and
+        // "9:30" all become "09:30". The server reads the birth time as HH:MM
+        // and refuses the other three, and so does the field's own pattern. The
+        // colon is optional here because the numeric keypad on a phone has no
+        // colon key. Anything else is left as it is, and the pattern then blocks
+        // the submit.
+        padTimeText() {
+          if (!this.plainTimeInput) return;
+          const field = this.$refs.birthTime;
+          const parts = field.value.trim().match(/^(\d{1,2}):?(\d{2})$/);
+          if (!parts) return;
+          field.value = parts[1].padStart(2, '0') + ':' + parts[2];
         },
 
         resetForm() {
