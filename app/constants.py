@@ -102,7 +102,7 @@ ELEMENT_SEQ_ABBREV: dict[nc.Element, str] = {
     nc.Element.METAL: "W",
 }
 
-# Form dropdown options: (form value, label).
+# Form option lists: (form value, label).
 GENDERS = [(gender.name, gender.name.title()) for gender in nc.Gender]
 NAMKHA_TYPES = [
     (namkha_type.name, namkha_type.name.title()) for namkha_type in nc.NamkhaType

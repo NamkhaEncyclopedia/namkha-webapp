@@ -96,7 +96,6 @@
                 hx-swap="innerHTML"
                 hx-disabled-elt="find button[type='submit']"
                 x-data="namkhaForm()"
-                x-init="$watch('method', value => { if (value === 'CNNR') namkhaType = 'YEAR' })"
                 @htmx:confirm="holdSubmitForTimezone($event)"
                 @namkha-resolve-timezone-again.window="fetchTimezone()">
             <input type="hidden" name="session_token" value="{{ session_token }}">
@@ -123,14 +122,21 @@
             {% endif %}
             <div class="form-mains">
               <div>
-                <label for="method" class="label-major">Calculation method:</label>
-                <select id="method"
-                        name="method"
-                        class="input-text"
-                        x-model="method"
-                        required>
-                  {% for value, text in methods %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-                </select>
+                <label class="label-major">Calculation method:</label>
+                <div class="radio-toggle">
+                  {% for value, text in methods %}
+                    <div class="radio-button">
+                      <input type="radio"
+                             id="method-{{ value }}"
+                             name="method"
+                             value="{{ value }}"
+                             x-model="method"
+                             {% if value == 'CNNR' %}checked{% endif %}
+                             required>
+                      <label for="method-{{ value }}" class="radio-label">{{ text }}</label>
+                    </div>
+                  {% endfor %}
+                </div>
               </div>
               <div>
                 <label for="name" class="label-major">Name (optional):</label>
@@ -144,28 +150,21 @@
               <div>
                 <label class="label-major">Namkha type:</label>
                 <div class="radio-toggle">
-                  {# TODO: drop `frozen` once the library calculates DAY and HOUR; the gate is then method-based alone. #}
-                  {# CNNR calculates the year alone, so it switches MONTH off. The $watch above moves the choice back to YEAR. #}
+                  {# TODO: drop `frozen` once the library calculates DAY and HOUR. #}
                   {% for value, text in namkha_types %}
                     {% set frozen = value in ('DAY', 'HOUR') %}
-                    {% set disabled_when = 'true' if frozen else ("method === 'CNNR'" if value != 'YEAR' else 'false') %}
                     <div class="radio-button">
                       <input type="radio"
                              id="type-{{ value }}"
                              name="namkha_type"
                              value="{{ value }}"
                              x-model="namkhaType"
-                             :disabled="{{ disabled_when }}"
+                             {% if frozen %}disabled{% endif %}
                              {% if value == 'YEAR' %}checked{% endif %}
                              required>
                       <label for="type-{{ value }}" class="radio-label">{{ text }}</label>
                       {# A cover appears on hover and says why the type is switched off. #}
-                      {% if frozen %}
-                        <span class="radio-cover" aria-hidden="true">Coming soon</span>
-                      {% elif value != 'YEAR' %}
-                        {# No x-cloak: the cover is already invisible until hover, and hiding it before Alpine starts would leave MONTH with no reason shown. #}
-                        <span class="radio-cover" aria-hidden="true" x-show="method === 'CNNR'">Classic only</span>
-                      {% endif %}
+                      {% if frozen %}<span class="radio-cover" aria-hidden="true">Coming soon</span>{% endif %}
                     </div>
                   {% endfor %}
                 </div>
@@ -652,6 +651,12 @@
         plainTimeInput: false,
 
         init() {
+          this.$watch('method', value => {
+            if (value === 'CNNR') this.namkhaType = 'YEAR';
+          });
+          this.$watch('namkhaType', value => {
+            if (value !== 'YEAR') this.method = 'CLASSIC';
+          });
           this.plainTimeInput = wantsPlainTimeInput();
           this.timezoneOptions = JSON.parse(
             document.getElementById('timezone-options').textContent

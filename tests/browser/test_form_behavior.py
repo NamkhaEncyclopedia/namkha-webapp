@@ -1,9 +1,10 @@
 """Alpine.js form behavior that TestClient can't reach.
 
-Namkha type gating is half method-based and half frozen. Classic offers Year and
-Month, CNNR offers Year alone, and Day and Hour stay switched off under a "Coming
-soon" cover until the library calculates them. The assertions below track that
-state, so unfreezing a type means changing them.
+The form keeps the method and the Namkha type on a pair the library can calculate.
+Choosing CNNR sets the type to Year. Choosing Month sets the method to Classic.
+Day and Hour are switched off under a "Coming soon" cover until the library
+calculates them. The assertions below track that state, so unfreezing a type
+means changing them.
 """
 
 import json
@@ -125,58 +126,50 @@ def choose_type(page, value):
     page.locator(f"label[for='type-{value}']").click()
 
 
-def test_month_is_selectable_with_the_classic_method(page, live_server):
+def choose_method(page, value):
+    """Pick a calculation method by clicking its label, as with the type."""
+    page.locator(f"label[for='method-{value}']").click()
+
+
+def test_the_form_opens_on_year(page, live_server):
     page.goto(live_server)
     year = page.locator("#type-YEAR")
     expect(year).to_be_enabled()
-    expect(year).to_be_checked()  # the type the form opens on
+    expect(year).to_be_checked()
+    expect(page.locator("#method-CNNR")).to_be_checked()
 
-    page.select_option("#method", "CLASSIC")
+
+def test_choosing_month_sets_the_method_to_classic(page, live_server):
+    page.goto(live_server)
     month = page.locator("#type-MONTH")
     expect(month).to_be_enabled()
+
     choose_type(page, "MONTH")
     expect(month).to_be_checked()
+    expect(page.locator("#method-CLASSIC")).to_be_checked()
 
 
-def test_month_is_switched_off_under_cnnr(page, live_server):
-    """CNNR calculates the year alone. Choosing it puts the type back to Year and
-    switches Month off, so the pair the server refuses cannot be built."""
+def test_choosing_cnnr_sets_the_type_to_year(page, live_server):
     page.goto(live_server)
-    page.select_option("#method", "CLASSIC")
     choose_type(page, "MONTH")
 
-    page.select_option("#method", "CNNR")
+    choose_method(page, "CNNR")
     expect(page.locator("#type-YEAR")).to_be_checked()
-    expect(page.locator("#type-MONTH")).to_be_disabled()
-
-
-def test_month_says_why_it_is_switched_off(page, live_server):
-    """A cover over the button carries the reason. Day and Hour carry the same
-    kind of cover, reading "Coming soon"."""
-    page.goto(live_server)
-    cover = page.get_by_text("Classic only")
-    expect(cover).to_be_visible()
-
-    page.select_option("#method", "CLASSIC")
-    expect(cover).to_be_hidden()
 
 
 def test_day_and_hour_are_still_frozen(page, live_server):
     page.goto(live_server)
-    page.select_option("#method", "CLASSIC")
     for value in ("DAY", "HOUR"):
         expect(page.locator(f"#type-{value}")).to_be_disabled()
     expect(page.get_by_text("Coming soon").first).to_be_visible()
 
 
 def test_choosing_month_shows_the_birth_time_precision_warning(page, live_server):
-    """Year is the only type that a rough birth time is enough for, so the warning
-    could not be reached while Month was frozen."""
+    """Year is the only type that a rough birth time is enough for."""
     warning = page.locator(".inline-tooltip", has_text="precision of at least")
 
     page.goto(live_server)
     expect(warning).to_be_hidden()
-    page.select_option("#method", "CLASSIC")
     choose_type(page, "MONTH")
     expect(warning).to_be_visible()
 
