@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
-## [Unreleased]
+## [0.1.0a5] – 2026-09-10
 
 ### Changed
 
@@ -19,8 +19,8 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 
 - The birth time field no longer closes Instagram's and Facebook's in-app
   browsers. There it takes the time as text, and reads "930" and "9:30" as 09:30.
-- A discarded/unloaded/etc. browser tab works again on the first press of Calculate. The
-  page renews its session by itself instead of being refused.
+- A tab the browser unloaded in the background works again on the first press of
+  Calculate. The page renews its session by itself instead of being refused.
 - Calculate always answers: a spinner while it waits, or a message saying what
   went wrong. An expired session, a rate limit, a dropped connection and a server
   error used to leave the page silent.
@@ -113,6 +113,7 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 Initial alpha release: web form for Namkha calculation, rendering a typeset sheet
 with an inline thread-cross illustration and a downloadable PDF.
 
+[0.1.0a5]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a4...v0.1.0a5
 [0.1.0a4]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a3...v0.1.0a4
 [0.1.0a3]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a2...v0.1.0a3
 [0.1.0a2]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a1...v0.1.0a2
