@@ -1,0 +1,13 @@
+{
+  "name": "Skipped Hour",
+  "gender": "MALE",
+  "birth_date": "1980-04-06",
+  "birth_time": "02:30",
+  "location_name": "Berlin, Germany",
+  "timezone": "",
+  "on_summer_time": "",
+  "latitude": "52.52",
+  "longitude": "13.40",
+  "namkha_type": "YEAR",
+  "method": "CLASSIC"
+}

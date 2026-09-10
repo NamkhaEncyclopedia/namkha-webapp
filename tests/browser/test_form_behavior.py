@@ -41,6 +41,18 @@ def resolved_zone(ticket_field):
 STUB_ANSWER = "answered by the test"
 
 
+def error_body(message):
+    """The markup the server sends for a failed calculation, as
+    app/templates/_error.html renders it. The warning icon and the placeholder
+    artwork are left out, since no test reads them.
+    """
+    return (
+        '<div class="diagrams"><div class="image-holder image-holder-error">'
+        f'<p class="error" role="alert"><span class="error-text">{message}</span></p>'
+        "</div></div>"
+    )
+
+
 def stub_calculate(page, posted, trigger=None, body=None):
     def answer(route):
         posted.append(route.request.post_data)
@@ -48,7 +60,7 @@ def stub_calculate(page, posted, trigger=None, body=None):
             status=200,
             content_type="text/html",
             headers={"HX-Trigger": trigger} if trigger else {},
-            body=body or f'<p class="error">{STUB_ANSWER}</p>',
+            body=body or error_body(STUB_ANSWER),
         )
 
     page.route("**/calculate", answer)
@@ -160,13 +172,13 @@ def test_a_dead_session_is_renewed_and_the_form_sent_again(page, live_server):
                 status=403,
                 content_type="text/html",
                 headers={"HX-Trigger": "namkha-session-expired"},
-                body='<p class="error">session expired</p>',
+                body=error_body("session expired"),
             )
         else:
             route.fulfill(
                 status=200,
                 content_type="text/html",
-                body=f'<p class="error">{STUB_ANSWER}</p>',
+                body=error_body(STUB_ANSWER),
             )
 
     page.route("**/calculate", answer)

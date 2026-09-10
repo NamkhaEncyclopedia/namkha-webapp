@@ -35,9 +35,10 @@
   --reset-button-hover-bg: #c3c7cd;
   --input-disabled-bg: #f3f4f6;
   --about-divider: #0d9488;
-  --error-color: #c62828;
-  --error-bg: #fdecea;
-  --error-border: #f3b4ad;
+  --error-panel-bg: #fadcb1; /* soft orange result placeholder in the error state */
+  --error-panel-border: #e8b775;
+  --error-text: #000;
+  --error-icon: #c62828;
   --hint-text: #555;
 
   --element-wood: #3abe5b;
@@ -928,6 +929,17 @@ button.download-link:hover {
   border-radius: 0.5rem;
   background: var(--image-placeholder-bg);
 }
+/* The error state keeps the placeholder and stacks the message plate above the
+   artwork, which stays centered in the space that is left. */
+.image-holder-error {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 1.25rem;
+}
+.image-holder-error img {
+  margin: auto 0;
+}
+
 .image-holder img {
   display: block;
   width: auto;
@@ -1113,14 +1125,29 @@ button.download-link:hover {
   margin-bottom: 0.75rem;
 }
 
+/* The plate at the top of the placeholder: the icon beside the message. */
 .error {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--error-bg);
-  border: 1px solid var(--error-border);
+  display: flex;
+  align-self: stretch;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0;
+  padding: 0.75rem 1.5rem;
+  background: var(--error-panel-bg);
+  border: 1px solid var(--error-panel-border);
   border-radius: 0.5rem;
-  color: var(--error-color);
-  font-weight: bold;
+  scroll-margin-top: 1.5rem;
+  color: var(--error-text);
+}
+/* The triangle's ink starts 0.125em below the top of its 2em box, and the cap
+   of the first line sits 0.3125em below the top of the line. Pushing the icon
+   down by the difference lines the two tops up. */
+.error-icon {
+  width: 2em;
+  height: 2em;
+  flex: none;
+  margin-top: 0.1875em;
+  color: var(--error-icon);
 }
 .hint {
   font-size: 0.85rem;

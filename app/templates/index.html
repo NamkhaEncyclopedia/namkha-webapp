@@ -503,6 +503,11 @@
             </div>
           </div>
         </template>
+        <template id="result-error">
+          {% with error = "" %}
+            {% include "_error.html" %}
+          {% endwith %}
+        </template>
       </section>
       {% include "_about.html" %}
       {% include "_donate.html" %}
@@ -566,14 +571,24 @@
       return document.querySelector('.calculator-form');
     }
 
-    // Same markup as _result.html uses for an error, so a message written here
-    // reads the same as one the server sent.
+    // The markup comes from the same partial the server renders, so a message
+    // written here reads the same as one the server sent.
     function showResultError(message) {
-      const paragraph = document.createElement('p');
-      paragraph.className = 'error';
-      paragraph.setAttribute('role', 'alert');
-      paragraph.textContent = message;
-      document.getElementById('result').replaceChildren(paragraph);
+      const markup = document.getElementById('result-error').content.cloneNode(true);
+      markup.querySelector('.error-text').textContent = message;
+      document.getElementById('result').replaceChildren(markup);
+      scrollResultIntoView();
+    }
+
+    // The result area sits below the form on a narrow screen, so a sheet or a
+    // message would otherwise land off screen. The message plate wins over the
+    // whole area, so the reader lands on the text itself.
+    function scrollResultIntoView() {
+      const result = document.getElementById('result');
+      const target = result.querySelector('.download-link')
+        || result.querySelector('.error')
+        || result;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // Read the input, not window.turnstile.getResponse: the input is what the
@@ -683,8 +698,7 @@
       // aria-live on #result already announces the update to screen readers;
       // scroll only, don't steal focus (.focus() triggers a caret-browsing-style
       // blinking cursor in the focused element for some Firefox users).
-      const scrollTarget = event.detail.target.querySelector('.download-link') || event.detail.target;
-      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollResultIntoView();
     });
 
     // The download form is a plain POST, so a refusal would replace the whole page
