@@ -232,6 +232,15 @@ def _reset_compile_rate_limit_state():
     main._compile_hits.clear()
 
 
+@pytest.fixture(autouse=True)
+def _reset_session_rate_limit_state():
+    """The /session limiter keeps its own process-global bucket; reset it around
+    every test so one test's renewals don't turn another one away."""
+    main._session_hits.clear()
+    yield
+    main._session_hits.clear()
+
+
 @pytest.fixture
 def download_form(client):
     """What the Download PDF button posts, obtained the way the page obtains it:

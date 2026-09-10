@@ -54,6 +54,12 @@ TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "0x4AAAAAAD9sLh4BbknGiGZq")
 # cannot import main.py: main.py imports forms.py, which imports that module.
 SESSION_TTL = 1800.0  # seconds
 
+# When the page stops trusting the result on screen and calculates again before
+# downloading it. Derived from SESSION_TTL so the two cannot drift apart: the
+# page has to give a result up before the server drops it, or the download posts
+# an id the server has already forgotten. Five minutes of margin.
+RESULT_STALE_MS = int((SESSION_TTL - 300) * 1000)
+
 # Element -> hex color. METAL is near-white, so swatches need a stroke.
 ELEMENT_COLORS: dict[nc.Element, str] = {
     nc.Element.WOOD: "#3ABE5B",

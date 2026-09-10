@@ -77,6 +77,23 @@ templates = Jinja2Templates(directory=BASE / "templates")
 # ticket the server has already forgotten.
 TIMEZONE_AGAIN_EVENT = "namkha-resolve-timezone-again"
 
+# Sent as HX-Trigger when /calculate refuses because the session token is no
+# longer usable. The page asks POST /session for a new one and sends the form
+# again, so a tab the browser put to sleep works on the first press of Calculate.
+SESSION_AGAIN_EVENT = "namkha-session-expired"
+
+# Shown when that renewal does not help either. The page swaps this in only after
+# its one retry has also been refused.
+SESSION_EXPIRED_MESSAGE = (
+    "Your session has expired and could not be renewed. Please reload the page."
+)
+
+# Shown when the per-client compile limit is reached. Nothing the page can do
+# about it, so the text says how to get past it.
+RATE_LIMIT_MESSAGE = (
+    "Too many calculations from your connection. Please wait a minute and try again."
+)
+
 # Off by default: enables the "load sample data" picker on the form, backed by
 # tests/fixtures/*.json. Routes are only registered (not just hidden) when set,
 # so the surface doesn't exist on a normal/production boot.
@@ -194,6 +211,18 @@ def _timezone_rate_limited(client: str) -> bool:
     )
 
 
+# /session abuse protection. Separate bucket from /timezone's.
+# The limit is low because one page renews at most once per refused submission,
+# and a client that reaches ten in a minute is not filling a form in.
+SESSION_RATE_LIMIT = 10  # requests per window per client
+SESSION_RATE_WINDOW = 60.0  # seconds
+_session_hits: dict[str, tuple[float, int]] = {}
+
+
+def _session_rate_limited(client: str) -> bool:
+    return _rate_limited(_session_hits, client, SESSION_RATE_LIMIT, SESSION_RATE_WINDOW)
+
+
 # /calculate and /download.pdf abuse protection. Unlike /timezone (an in-memory
 # boundary search), these run skyfield's calculation plus a full Typst compile --
 # real CPU cost per request. Same per-client fixed window, separate bucket, plus
@@ -211,12 +240,18 @@ def _compile_rate_limited(client: str) -> bool:
     return _rate_limited(_compile_hits, client, COMPILE_RATE_LIMIT, COMPILE_RATE_WINDOW)
 
 
-def _reject_if_compile_rate_limited(client: str, route: str) -> None:
-    """Shared opening guard for the two compile-bearing routes, so a third one
-    can't pick up the limiter without also picking up the log line."""
-    if _compile_rate_limited(client):
-        logger.warning("compile rate limit exceeded for %s on %s", client, route)
-        raise HTTPException(status_code=429, detail="Too many requests")
+def _compile_rate_limit_hit(client: str, route: str) -> bool:
+    """Count one request against the compile limit. Return True if the client is
+    over the limit.
+
+    The warning is written here, not in the routes, so every route that uses the
+    limiter also logs. Each route then answers in its own way: /calculate returns
+    an HTML partial the page shows, /download.pdf raises.
+    """
+    if not _compile_rate_limited(client):
+        return False
+    logger.warning("compile rate limit exceeded for %s on %s", client, route)
+    return True
 
 
 @asynccontextmanager
@@ -442,6 +477,7 @@ async def robots(request: Request):
         "User-agent: *\n"
         "Disallow: /calculate\n"
         "Disallow: /download.pdf\n"
+        "Disallow: /session\n"
         "Disallow: /timezone\n"
         "Disallow: /test-mode/\n"
         f"Sitemap: {request.url_for('sitemap')}\n"
@@ -461,12 +497,29 @@ async def sitemap(request: Request):
     return Response(body, media_type="application/xml")
 
 
+@app.post("/session")
+async def session(request: Request):
+    """Issue a session token to a page that already had one that is now dead.
+
+    Rate limited, unlike GET /
+    """
+    client = _client_ip(request)
+    if _session_rate_limited(client):
+        logger.warning("session rate limit exceeded for %s", client)
+        raise HTTPException(status_code=429, detail="Too many requests")
+    return {"session_token": _issue_session_token(client)}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {
+        # The page carries a session token that only this process knows, so a
+        # copy from the browser cache is dead on arrival. A discarded tab reloads
+        # when the user comes back to it, and must reach us to get a live one.
+        headers={"Cache-Control": "no-store"},
+        context={
             "genders": constants.GENDERS,
             "namkha_types": constants.NAMKHA_TYPES,
             "methods": constants.METHODS,
@@ -478,6 +531,11 @@ async def index(request: Request):
             "test_mode_enabled": TEST_MODE_ENABLED,
             "session_token": _issue_session_token(_client_ip(request)),
             "turnstile_sitekey": constants.TURNSTILE_SITEKEY,
+            # The page's JavaScript needs following two. Sending them keeps one copy
+            # of each, so changing SESSION_TTL or the message text needs no
+            # second edit in the template.
+            "result_stale_ms": constants.RESULT_STALE_MS,
+            "session_expired_message": SESSION_EXPIRED_MESSAGE,
             # Same caps build_request enforces, so the two can't drift apart.
             "max_name_length": MAX_NAME_LENGTH,
             "max_location_name_length": MAX_LOCATION_NAME_LENGTH,
@@ -519,6 +577,23 @@ def _sheet_label(form) -> str:
     return f"Namkha calculation sheet{named}, {namkha_type} type, {method} method"
 
 
+# Refusals the page can act on by itself, and the event that tells it to do so.
+# Both stand for a piece of state this process has forgotten while the page stayed
+# open, and both would refuse every further press of Calculate the same way.
+#
+# The message text is still in the body. The page shows it when the repair it
+# tried does not help either.
+_REPAIR_EVENTS: dict[str | None, str] = {
+    # The zone behind the ticket is gone. The page asks
+    # /timezone for a new ticket, and the next press carries one this process knows.
+    RESOLVE_AGAIN_MESSAGE: TIMEZONE_AGAIN_EVENT,
+    # The session token is gone, or was issued to another
+    # address. The page asks /session for a new token and sends the form again by
+    # itself, so a sleeping tab needs no reload.
+    SESSION_EXPIRED_MESSAGE: SESSION_AGAIN_EVENT,
+}
+
+
 def _log_unexpected(route: str, form, exc: Exception) -> None:
     """Unexpected failure (e.g. a Typst compile error): log with form context.
     The caller re-raises unchanged, so the 500 response is exactly as before."""
@@ -538,14 +613,12 @@ def _result_response(
     """Single context shape for _result.html, used by both the success and
     error swaps so the template never sees a partial context.
 
-    The page keeps the ticket it was given. Once this process no longer holds the
-    zone behind it, every further press of Calculate would fail the same way, so a
-    refusal carrying RESOLVE_AGAIN_MESSAGE also asks the page to fetch a new ticket
-    from /timezone.
+    Two refusals ask the page to repair itself; see _REPAIR_EVENTS.
     """
     headers = {}
-    if error == RESOLVE_AGAIN_MESSAGE:
-        headers["HX-Trigger"] = TIMEZONE_AGAIN_EVENT
+    repair_event = _REPAIR_EVENTS.get(error)
+    if repair_event is not None:
+        headers["HX-Trigger"] = repair_event
     return templates.TemplateResponse(
         request,
         "_result.html",
@@ -564,13 +637,16 @@ def _result_response(
 @app.post("/calculate", response_class=HTMLResponse)
 async def calculate(request: Request):
     client = _client_ip(request)
-    _reject_if_compile_rate_limited(client, "/calculate")
-
     form = await request.form()
+    if _compile_rate_limit_hit(client, "/calculate"):
+        return _result_response(
+            request, form, error=RATE_LIMIT_MESSAGE, status_code=429
+        )
+
     session_token = form.get("session_token")
     if not _valid_session_token(session_token, client):
-        raise HTTPException(
-            status_code=403, detail="Session expired; reload the page and try again."
+        return _result_response(
+            request, form, error=SESSION_EXPIRED_MESSAGE, status_code=403
         )
 
     # Bot gate, before any of the expensive work. The token is single-use and
@@ -682,7 +758,8 @@ def _content_disposition(filename: str) -> str:
 @app.post("/download.pdf")
 async def download_pdf(request: Request):
     client = _client_ip(request)
-    _reject_if_compile_rate_limited(client, "/download.pdf")
+    if _compile_rate_limit_hit(client, "/download.pdf"):
+        raise HTTPException(status_code=429, detail="Too many requests")
 
     form = await request.form()
     # The result being downloaded came from a /calculate that passed Turnstile;

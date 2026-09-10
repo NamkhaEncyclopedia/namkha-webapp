@@ -8,6 +8,7 @@ means changing them.
 """
 
 import json
+import re
 from datetime import date
 
 import namkha_calculator as nc
@@ -40,25 +41,30 @@ def resolved_zone(ticket_field):
 STUB_ANSWER = "answered by the test"
 
 
-def stub_calculate(page, posted, trigger=None):
+def stub_calculate(page, posted, trigger=None, body=None):
     def answer(route):
         posted.append(route.request.post_data)
         route.fulfill(
             status=200,
             content_type="text/html",
             headers={"HX-Trigger": trigger} if trigger else {},
-            body=f'<p class="error">{STUB_ANSWER}</p>',
+            body=body or f'<p class="error">{STUB_ANSWER}</p>',
         )
 
     page.route("**/calculate", answer)
 
 
-def submitted_ticket(body):
+def submitted_field(body, name):
+    """One field's value out of a posted form body."""
     for pair in (body or "").split("&"):
         key, _, value = pair.partition("=")
-        if key == "timezone_ticket":
+        if key == name:
             return value
     return ""
+
+
+def submitted_ticket(body):
+    return submitted_field(body, "timezone_ticket")
 
 
 def test_pressing_calculate_straight_after_an_edit_sends_a_zone(page, live_server):
@@ -114,6 +120,137 @@ def test_a_forgotten_zone_is_asked_for_again(page, live_server):
     page.locator("button[type='submit']").click()
     expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
     assert read_ticket(submitted_ticket(posted[-1])) is not None
+
+
+def fill_a_calculable_birth(page):
+    """Enter enough for the form to submit: coordinates, a date and a time.
+    Returns once the server has worked the time zone out.
+    """
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_date", "1985-06-15")
+    page.fill("#birth_time", "12:00")
+    resolved_zone(page.locator("input[name='timezone_ticket']"))
+
+
+def test_a_dropped_connection_says_so(page, live_server):
+    """What the visitor sees when the connection dies mid-submission.
+
+    route.abort() makes the browser fail the request before it leaves the
+    machine, which is what a dropped connection does. The server is never
+    reached, so there is no reply at all: no status, no body, nothing for htmx
+    to put on screen. The page has to write the message itself.
+    """
+    page.route("**/calculate", lambda route: route.abort())
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result .error")).to_contain_text("Could not reach the server")
+
+
+def test_a_dead_session_is_renewed_and_the_form_sent_again(page, live_server):
+    posted = []
+
+    def answer(route):
+        posted.append(route.request.post_data)
+        if len(posted) == 1:
+            route.fulfill(
+                status=403,
+                content_type="text/html",
+                headers={"HX-Trigger": "namkha-session-expired"},
+                body='<p class="error">session expired</p>',
+            )
+        else:
+            route.fulfill(
+                status=200,
+                content_type="text/html",
+                body=f'<p class="error">{STUB_ANSWER}</p>',
+            )
+
+    page.route("**/calculate", answer)
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+    assert len(posted) == 2
+    first = submitted_field(posted[0], "session_token")
+    second = submitted_field(posted[1], "session_token")
+    assert first and second and first != second  # a new token, not the dead one
+
+
+def test_the_spinner_runs_through_the_wait_before_the_send(page, live_server):
+    """Pressing Calculate in a coordinate field is what ends the edit there, so
+    the zone lookup and the submit start together and the form holds the submit
+    until the zone lands. htmx has not sent yet, so it has not marked the form,
+    and the spinner has to be driven by the form itself through that wait.
+    """
+    posted = []
+    stub_calculate(page, posted)
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    page.fill("#longitude-ui", "13.4070")
+    page.locator("button[type='submit']").click()
+    expect(page.locator(".calculator-form")).to_have_class(re.compile("submit-pending"))
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+
+
+def test_a_stale_download_calculates_again_first(page, live_server):
+    """What the Download button does on a sheet the server has forgotten."""
+    calculated = []
+    downloaded = []
+
+    def answer_download(route):
+        downloaded.append(route.request.post_data)
+        route.fulfill(status=204)  # no body, so the page stays put
+
+    # The shape _result.html gives a result: the download form the page looks for.
+    stub_calculate(
+        page,
+        calculated,
+        body=(
+            '<form method="post" action="/download.pdf">'
+            '<button type="submit" class="download-link">Download PDF</button>'
+            "</form>"
+        ),
+    )
+    page.route("**/download.pdf", answer_download)
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    page.locator("button[type='submit']").click()
+    expect(page.locator(".download-link")).to_be_visible()
+    assert len(calculated) == 1
+
+    # The button is on screen either way, so wait for the download request
+    # itself. Waiting on the sheet would pass on the stale one already shown.
+    page.evaluate("lastResultAt = 0")
+    with page.expect_response("**/download.pdf"):
+        page.locator(".download-link").click()
+    assert len(calculated) == 2, "Download did not calculate again first"
+    assert len(downloaded) == 1, "the fresh result was not downloaded"
+
+
+def test_reset_during_the_wait_abandons_the_submit(page, live_server):
+    posted = []
+    stub_calculate(page, posted)
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    # Pressing Calculate in a coordinate field starts the zone lookup and the
+    # submit together, so the form is holding the submit while Reset is pressed.
+    page.fill("#longitude-ui", "13.4070")
+    page.locator("button[type='submit']").click()
+    expect(page.locator(".calculator-form")).to_have_class(re.compile("submit-pending"))
+    page.get_by_role("button", name="Reset").click()
+
+    expect(page.locator(".calculator-form")).not_to_have_class(
+        re.compile("submit-pending")
+    )
+    assert posted == [], "the held submit was sent after Reset"
 
 
 def choose_type(page, value):

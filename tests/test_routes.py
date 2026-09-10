@@ -186,6 +186,67 @@ def test_download_pdf_rejects_missing_session_token(client, fixture_form):
     assert response.status_code == 403
 
 
+def test_calculate_answers_an_expired_session_with_a_swappable_partial(
+    client, fixture_form
+):
+    """The page shows a failed reply only when it is HTML. It drops a JSON body,
+    and then the user sees nothing at all. So this refusal must come back as an
+    HTML partial. It must also carry the event that tells the page to ask for a
+    new session token.
+    """
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = "not-a-real-token"
+    response = client.post("/calculate", data=form)
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["HX-Trigger"] == main.SESSION_AGAIN_EVENT
+    assert main.SESSION_EXPIRED_MESSAGE in response.text
+
+
+def test_session_route_issues_a_usable_token(client, fixture_form):
+    """What a page does after it is refused: ask for a new token, put it in the
+    form, and send the form again."""
+    token = client.post("/session").json()["session_token"]
+    form = fixture_form("year_classic_berlin")
+    form["session_token"] = token
+    assert client.post("/calculate", data=form).status_code == 200
+
+
+def test_calculate_answers_the_rate_limit_with_a_swappable_partial(
+    client, fixture_form, monkeypatch
+):
+    monkeypatch.setattr(main, "COMPILE_RATE_LIMIT", 0)
+    response = client.post("/calculate", data=fixture_form("year_classic_berlin"))
+    assert response.status_code == 429
+    assert response.headers["content-type"].startswith("text/html")
+    assert main.RATE_LIMIT_MESSAGE in response.text
+
+
+def test_download_pdf_still_answers_the_rate_limit_with_json(
+    client, fixture_form, download_form, monkeypatch
+):
+    """Only /calculate needs a partial: its reply is swapped into the page. The
+    download is a plain POST, so it keeps the refusal it had."""
+    payload = download_form(fixture_form("year_classic_berlin"))
+    monkeypatch.setattr(main, "COMPILE_RATE_LIMIT", 0)
+    response = client.post("/download.pdf", data=payload)
+    assert response.status_code == 429
+    assert response.json()["detail"] == "Too many requests"
+
+
+def test_index_is_not_cached(client):
+    """The page carries a session token only this process knows. A copy served
+    from the browser cache would hold a token that is already dead."""
+    assert client.get("/").headers["cache-control"] == "no-store"
+
+
+def test_session_route_is_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(main, "SESSION_RATE_LIMIT", 2)
+    assert client.post("/session").status_code == 200
+    assert client.post("/session").status_code == 200
+    assert client.post("/session").status_code == 429
+
+
 def test_index_issues_usable_session_token(client, fixture_form):
     page = client.get("/")
     token = page.text.split('name="session_token" value="')[1].split('"')[0]

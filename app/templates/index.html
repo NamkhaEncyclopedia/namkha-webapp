@@ -96,7 +96,8 @@
                 hx-swap="innerHTML"
                 hx-disabled-elt="find button[type='submit']"
                 x-data="namkhaForm()"
-                @htmx:confirm="holdSubmitForTimezone($event)"
+                :class="{ 'submit-pending': submitPending }"
+                @htmx:confirm="holdSubmit($event)"
                 @namkha-resolve-timezone-again.window="fetchTimezone()">
             <input type="hidden" name="session_token" value="{{ session_token }}">
             {% if test_mode_enabled %}
@@ -533,17 +534,128 @@
 
     document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
 
-    // A rejected Turnstile check answers with the error partial and a 403; htmx
-    // drops non-2xx bodies unless we opt in. Content type keeps this to our own
-    // HTML partials -- the JSON 403/429 from the other gates stay as they were.
+    // Matches SESSION_AGAIN_EVENT in main.py.
+    const SESSION_AGAIN_EVENT = 'namkha-session-expired';
+
+    const TURNSTILE_WAIT_MS = 15000;
+    const TURNSTILE_POLL_MS = 100;
+
+    const RESULT_STALE_MS = {{ result_stale_ms | tojson }};
+
+    const NETWORK_MESSAGE =
+      'Could not reach the server. Check your connection and press Calculate again.';
+    const TIMEOUT_MESSAGE =
+      'The server took too long to answer. Please press Calculate again.';
+    const GENERAL_ERROR_MESSAGE =
+      'Something went wrong on our side. Please try again in a moment.';
+    const SESSION_RENEWAL_MESSAGE = {{ session_expired_message | tojson }};
+    const SUBMIT_HELD_MESSAGE =
+      'Could not start the calculation: the bot check did not finish. If your ' +
+      'browser blocks challenges.cloudflare.com, allow it and press Calculate again.';
+
+    // Well above a calculation queued behind others, so nothing legitimate is
+    // cut off. Without it a request that never answers spins forever.
+    htmx.config.timeout = 120000;
+
+    let lastResultAt = 0;
+    let downloadAfterRecalculate = false;
+    // One renewal per refusal.
+    let sessionRenewalTried = false;
+
+    function calculatorForm() {
+      return document.querySelector('.calculator-form');
+    }
+
+    // Same markup as _result.html uses for an error, so a message written here
+    // reads the same as one the server sent.
+    function showResultError(message) {
+      const paragraph = document.createElement('p');
+      paragraph.className = 'error';
+      paragraph.setAttribute('role', 'alert');
+      paragraph.textContent = message;
+      document.getElementById('result').replaceChildren(paragraph);
+    }
+
+    // Read the input, not window.turnstile.getResponse: the input is what the
+    // form submits, and it is what the browser tests' stand-in widget fills.
+    function turnstileToken() {
+      const input = calculatorForm().querySelector('input[name="cf-turnstile-response"]');
+      return input ? input.value : '';
+    }
+
+    async function waitForTurnstileToken() {
+      for (let waited = 0; waited < TURNSTILE_WAIT_MS; waited += TURNSTILE_POLL_MS) {
+        if (turnstileToken()) return;
+        await new Promise(resolve => setTimeout(resolve, TURNSTILE_POLL_MS));
+      }
+      throw new Error('the Turnstile widget produced no token');
+    }
+
+    // The session token expires with the server's SESSION_TTL, and it is tied to
+    // the address it was issued to. A tab the browser put to sleep, or a switch
+    // from Wi-Fi to mobile data, leaves the form holding a token /calculate
+    // refuses. Everything entered is still on screen, so repair it in place.
+    async function renewSessionAndResend() {
+      try {
+        const response = await fetch('/session', { method: 'POST' });
+        if (!response.ok) throw new Error('/session answered ' + response.status);
+        const data = await response.json();
+        const form = calculatorForm();
+        form.querySelector('input[name="session_token"]').value = data.session_token;
+        // holdSubmit waits for the new Turnstile token and shows the spinner.
+        form.requestSubmit();
+      } catch (error) {
+        console.warn('Could not renew the session:', error);
+        sessionRenewalTried = false;
+        showResultError(SESSION_RENEWAL_MESSAGE);
+      }
+    }
+
+    // Called when the Download button belongs to a sheet older than the server
+    // keeps results for.
+    function recalculateThenDownload() {
+      downloadAfterRecalculate = true;
+      const form = calculatorForm();
+      // A submit already on its way brings in the fresh result by itself,
+      // whether it is still waiting or already sent.
+      if (form.matches('.submit-pending, .htmx-request')) return;
+      form.requestSubmit();
+    }
+
+    // htmx drops non-2xx bodies unless we opt in. Our own error partials are
+    // swapped; anything else gets a message written here, so no press of
+    // Calculate ends in silence.
     document.body.addEventListener('htmx:beforeSwap', (event) => {
       const xhr = event.detail.xhr;
       if (event.detail.target.id !== 'result' || xhr.status < 400) return;
+      if (xhr.getResponseHeader('HX-Trigger') === SESSION_AGAIN_EVENT && !sessionRenewalTried) {
+        // Repair instead of showing the refusal. The message in the body is kept
+        // back for a second refusal, which means renewing did not help.
+        sessionRenewalTried = true;
+        event.detail.shouldSwap = false;
+        renewSessionAndResend();
+        return;
+      }
+      sessionRenewalTried = false;
       const contentType = (xhr.getResponseHeader('content-type') || '').trim().toLowerCase();
       if (contentType.startsWith('text/html')) {
         event.detail.shouldSwap = true;
         event.detail.isError = false;
+        return;
       }
+      event.detail.shouldSwap = false;
+      showResultError(GENERAL_ERROR_MESSAGE);
+    });
+
+    // No response at all, so beforeSwap never runs for either of these.
+    document.body.addEventListener('htmx:sendError', (event) => {
+      if (!event.detail.elt.classList.contains('calculator-form')) return;
+      showResultError(NETWORK_MESSAGE);
+    });
+
+    document.body.addEventListener('htmx:timeout', (event) => {
+      if (!event.detail.elt.classList.contains('calculator-form')) return;
+      showResultError(TIMEOUT_MESSAGE);
     });
 
     // Turnstile tokens are single-use, and the page stays put after a submission,
@@ -551,16 +663,38 @@
     // the token is spent on rejected and invalid submissions too, which don't swap.
     document.body.addEventListener('htmx:afterRequest', (event) => {
       if (!event.detail.elt.classList.contains('calculator-form')) return;
+      // A request that worked ends the one-renewal-per-refusal rule, so a
+      // session that dies later is renewed again. This is the only place a
+      // renewal is known to have succeeded: beforeSwap sees refusals alone.
+      if (event.detail.xhr && event.detail.xhr.status < 400) sessionRenewalTried = false;
       if (window.turnstile) window.turnstile.reset('.cf-turnstile');
     });
 
     document.body.addEventListener('htmx:afterSwap', (event) => {
       if (event.detail.target.id !== 'result') return;
+      const downloadForm = event.detail.target.querySelector('form[action="/download.pdf"]');
+      if (downloadForm) lastResultAt = Date.now();
+      if (downloadAfterRecalculate) {
+        // A calculation that failed swapped in a message and no download form.
+        // The message stands on its own, so drop the download.
+        downloadAfterRecalculate = false;
+        if (downloadForm) downloadForm.requestSubmit();
+      }
       // aria-live on #result already announces the update to screen readers;
       // scroll only, don't steal focus (.focus() triggers a caret-browsing-style
       // blinking cursor in the focused element for some Firefox users).
       const scrollTarget = event.detail.target.querySelector('.download-link') || event.detail.target;
       scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // The download form is a plain POST, so a refusal would replace the whole page
+    // with the server's error body. A sheet left on screen by a sleeping tab points
+    // at a result the server has dropped, so calculate again first.
+    document.getElementById('result').addEventListener('submit', (event) => {
+      if (!event.target.matches('form[action="/download.pdf"]')) return;
+      if (Date.now() - lastResultAt < RESULT_STALE_MS) return;
+      event.preventDefault();
+      recalculateThenDownload();
     });
 
     // Rank a normalized timezone label against a normalized query:
@@ -649,6 +783,10 @@
         timezoneOptions: [],
         // The browser decides this once, so Reset must not touch it.
         plainTimeInput: false,
+        // True while holdSubmit waits for what the submit needs. Kept out of
+        // initialFormState so pressing Reset during a wait cannot clear it and
+        // let a second press start a second wait.
+        submitPending: false,
 
         init() {
           this.$watch('method', value => {
@@ -792,8 +930,8 @@
           this.timezoneRequestId += 1;
         },
 
-        // Ask /timezone, keeping the promise so holdSubmitForTimezone can wait for
-        // this same lookup. Callers fire and forget; none of them await it.
+        // Ask /timezone, keeping the promise so holdSubmit can wait for this
+        // same lookup. Callers fire and forget; none of them await it.
         //
         // The form also calls this when /calculate answers with the ask-again event
         // (main.TIMEZONE_AGAIN_EVENT): the server no longer holds the zone this
@@ -804,7 +942,8 @@
           return this.timezonePending;
         },
 
-        // Let the submit through once a time zone is in hand.
+        // Let the submit through once everything it needs is in hand: a time
+        // zone ticket and a Turnstile token.
         //
         // Alpine calls this from @htmx:confirm on the form. htmx fires that before
         // it sends, and it allows holding the send back and starting it again later.
@@ -812,12 +951,36 @@
         // in a field that resolves when focus leaves it: the lookup and the submit
         // start in the same moment, with no time zone between them. Sending then
         // would have the server refuse a form that is in fact complete.
-        async holdSubmitForTimezone(event) {
-          if (this.timezoneTicket) return;  // already have one, send now
+        //
+        // The Turnstile token is held for the same reason. htmx:afterRequest resets
+        // the widget, and the new token takes a moment to arrive, so a press that
+        // lands in that moment finds the token field empty.
+        //
+        // submitPending drives the spinner. htmx has not sent yet, so it has not
+        // marked the form, and without this the whole wait shows nothing.
+        async holdSubmit(event) {
+          if (this.submitPending) {
+            event.preventDefault();  // a wait is already running; ignore this press
+            return;
+          }
+          if (this.timezoneTicket && turnstileToken()) return;  // send now
           event.preventDefault();
-          await this.timezonePending;
-          // true skips a second htmx:confirm, which would hold this send again.
-          event.detail.issueRequest(true);
+          this.submitPending = true;
+          try {
+            // Both at once: the zone lookup and the bot check do not depend on
+            // each other, so the wait is the longer one, not the two added up.
+            await Promise.all([this.timezonePending, waitForTurnstileToken()]);
+            // true skips a second htmx:confirm, which would hold this send again.
+            event.detail.issueRequest(true);
+          } catch (error) {
+            // Nothing was sent, so no result arrives and htmx:afterSwap never
+            // runs. Say so, and drop a download waiting on this calculation.
+            console.warn('Submit could not start:', error);
+            downloadAfterRecalculate = false;
+            showResultError(SUBMIT_HELD_MESSAGE);
+          } finally {
+            this.submitPending = false;
+          }
         },
 
         async lookUpTimezone() {

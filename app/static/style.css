@@ -838,10 +838,12 @@ button > img {
 .htmx-indicator {
   display: none;
 }
-.htmx-request .icon-calculate {
+.htmx-request .icon-calculate,
+.submit-pending .icon-calculate {
   display: none;
 }
-.htmx-request .htmx-indicator {
+.htmx-request .htmx-indicator,
+.submit-pending .htmx-indicator {
   display: inline-block;
   vertical-align: -2px;
   margin-right: 0.25rem;

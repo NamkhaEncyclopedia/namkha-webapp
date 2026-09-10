@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- A discarded/unloaded/etc. browser tab works again on the first press of Calculate. The
+  page renews its session by itself instead of being refused.
+- Calculate always answers: a spinner while it waits, or a message saying what
+  went wrong. An expired session, a rate limit, a dropped connection and a server
+  error used to leave the page silent.
+- Download PDF on a sheet the server no longer holds calculates again first,
+  instead of replacing the page with a raw error.
+
 ## [0.1.0a4] – 2026-09-06
 
 ### Added
