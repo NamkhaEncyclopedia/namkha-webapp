@@ -7,8 +7,16 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 
 ## [Unreleased]
 
+### Changed
+
+- The calculation method is a row of buttons instead of a dropdown. Choosing CNNR
+  sets the type to Year, and choosing another type sets the method to Classic, so
+  a pair the library cannot calculate is never offered.
+
 ### Fixed
 
+- The birth time field no longer closes Instagram's and Facebook's in-app
+  browsers. There it takes the time as text, and reads "930" and "9:30" as 09:30.
 - A discarded/unloaded/etc. browser tab works again on the first press of Calculate. The
   page renews its session by itself instead of being refused.
 - Calculate always answers: a spinner while it waits, or a message saying what
