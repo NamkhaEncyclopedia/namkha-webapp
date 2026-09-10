@@ -12,6 +12,15 @@ from app.timezone_tickets import FIELD_NAME as TIMEZONE_TICKET_FIELD
 from app.timezone_tickets import read_ticket
 
 
+def test_the_home_page_ships_no_comments(client):
+    """index.html carries developer notes about internals. Jinja comments are
+    dropped while the page is built; HTML comments are sent as they are. This
+    fetches the page and looks for both, so a note cannot reach a visitor."""
+    page = client.get("/").text
+    assert "<!--" not in page
+    assert "{#" not in page  # a mistyped Jinja comment would be escaped, not dropped
+
+
 def test_index_ok(client):
     response = client.get("/")
     assert response.status_code == 200

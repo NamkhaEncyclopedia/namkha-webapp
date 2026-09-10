@@ -31,8 +31,8 @@
     <link rel="stylesheet" href="/static/lightbox.css">
     <script src="/static/htmx.min.js"></script>
     <script defer src="/static/alpine.min.js"></script>
-    <!-- Cloudflare Turnstile bot check on the calculator form. The only script
-       not vendored: it must be loaded from Cloudflare, never proxied or cached. -->
+    {# Cloudflare Turnstile bot check on the calculator form. The only script
+       not vendored: it must be loaded from Cloudflare, never proxied or cached. #}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js"
             async
             defer></script>
@@ -105,7 +105,7 @@
                    x-data="{ fixtures: [], chosen: '', visible: true }"
                    x-init="fetch('/test-mode/fixtures').then(r => r.json()).then(names => fixtures = names)"
                    x-show="visible">
-                <label for="test-mode-fixture" class="sr-only">Test mode — load sample data</label>
+                <label for="test-mode-fixture" class="sr-only">Test mode – load sample data</label>
                 <select id="test-mode-fixture" class="input-text" x-model="chosen">
                   <option value="">Choose a fixture…</option>
                   <template x-for="fixtureName in fixtures" :key="fixtureName">
@@ -213,7 +213,7 @@
                         x-show="isSearchingPlaces"
                         x-cloak></span>
                 </div>
-                <!-- Place field text submits as the location name (both modes). -->
+                {# Place field text submits as the location name (both modes). #}
                 <input type="hidden" name="location_name" :value="placeQuery">
                 <ul class="suggestion-list"
                     id="place-listbox"
@@ -301,7 +301,7 @@
                 <div class="input-columns">
                   <div>
                     <label for="birth_time" class="label-major">Local birth time:</label>
-                    <!-- Time picker as plain text option is added to prevent Instagram internal browser from crashing (see wantsPlainTimeInput() for details). -->
+                    {# Time picker as plain text option is added to prevent Instagram internal browser from crashing (see wantsPlainTimeInput() for details). #}
                     <input type="text"
                            :type="plainTimeInput ? 'text' : 'time'"
                            id="birth_time"
@@ -332,18 +332,18 @@
                       <option value="list">Choose from list</option>
                       <option value="offset">UTC offset</option>
                     </select>
-                    <!-- Automatic mode submits neither field; the library derives the zone from birth place and date. -->
+                    {# Automatic mode submits neither field; the library derives the zone from birth place and date. #}
                     <input type="hidden"
                            name="timezone"
                            :value="timezoneMode === 'list' ? timezone : ''">
                     <input type="hidden"
                            name="utc_offset"
                            :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
-                    <!-- The ticket /timezone gave for the zone it kept. Empty
-                         until a lookup succeeds, and an empty one is refused on
-                         submit: the calculation takes its zone from the store
-                         this ticket points into, and never works one out for
-                         itself. -->
+                    {# The ticket /timezone gave for the zone it kept. Empty
+                       until a lookup succeeds, and an empty one is refused on
+                       submit: the calculation takes its zone from the store
+                       this ticket points into, and never works one out for
+                       itself. #}
                     <input type="hidden" name="timezone_ticket" :value="timezoneTicket">
                   </div>
                 </div>
@@ -371,18 +371,18 @@
                            @input="searchTimezones()"
                            @keydown="onTimezoneKeydown($event)"
                            @blur="commitTimezoneOnBlur()">
-                    <!-- The list stays on screen for as long as this mode is
-                         chosen. The search field narrows it in place; it never
-                         opens or closes. -->
+                    {# The list stays on screen for as long as this mode is
+                       chosen. The search field narrows it in place; it never
+                       opens or closes. #}
                     <ul class="timezone-list"
                         id="timezone-listbox"
                         role="listbox"
                         aria-label="Time zones"
                         x-ref="timezoneList">
-                      <!-- timezoneRows holds headings and zones. A row with a
-                           region is a heading; every other row is a zone.
-                           Screen readers skip the headings, because each zone
-                           key already starts with its region. -->
+                      {# timezoneRows holds headings and zones. A row with a
+                         region is a heading; every other row is a zone.
+                         Screen readers skip the headings, because each zone
+                         key already starts with its region. #}
                       <template x-for="row in timezoneRows" :key="row.key">
                         <li :class="row.region ? 'timezone-group' : { 'timezone-suggestion': true, 'is-active': row.index === timezoneActiveIndex, 'is-selected': row.key === timezone, }"
                             :role="row.region ? 'presentation' : 'option'"
@@ -435,7 +435,7 @@
                             @focus="positionTip($event)">?</button>
                     <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
                   </span>
-                  <!-- A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. -->
+                  {# A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. #}
                   <select id="on_summer_time"
                           name="on_summer_time"
                           class="input-text"
@@ -447,10 +447,10 @@
                     <option value="false">No</option>
                   </select>
                 </div>
-                <!-- What the entered details already imply, shown before the
-                     calculation runs. Notes that need the finished result, such
-                     as a birth time next to a period boundary, appear on the
-                     sheet only. -->
+                {# What the entered details already imply, shown before the
+                   calculation runs. Notes that need the finished result, such
+                   as a birth time next to a period boundary, appear on the
+                   sheet only. #}
                 <template x-if="timezoneNotes.length">
                   <ul class="input-notes" role="status" x-cloak>
                     <template x-for="note in timezoneNotes" :key="note.message">
@@ -471,9 +471,9 @@
               </div>
             </div>
             <div class="form-mains form-actions">
-              <!-- Turnstile adds its own hidden cf-turnstile-response input to this
+              {# Turnstile adds its own hidden cf-turnstile-response input to this
                  form, which htmx serializes with the rest. interaction-only: shown
-                 only when Cloudflare actually challenges the visitor. -->
+                 only when Cloudflare actually challenges the visitor. #}
               <div class="cf-turnstile"
                    data-sitekey="{{ turnstile_sitekey }}"
                    data-action="calculate"
@@ -539,7 +539,7 @@
 
     document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
 
-    // Matches SESSION_AGAIN_EVENT in main.py.
+    {# Matches SESSION_AGAIN_EVENT in main.py. #}
     const SESSION_AGAIN_EVENT = 'namkha-session-expired';
 
     const TURNSTILE_WAIT_MS = 15000;
@@ -558,21 +558,21 @@
       'Could not start the calculation: the bot check did not finish. If your ' +
       'browser blocks challenges.cloudflare.com, allow it and press Calculate again.';
 
-    // Well above a calculation queued behind others, so nothing legitimate is
-    // cut off. Without it a request that never answers spins forever.
+    {# Well above a calculation queued behind others, so nothing legitimate is #}
+    {# cut off. Without it a request that never answers spins forever. #}
     htmx.config.timeout = 120000;
 
     let lastResultAt = 0;
     let downloadAfterRecalculate = false;
-    // One renewal per refusal.
+    {# One renewal per refusal. #}
     let sessionRenewalTried = false;
 
     function calculatorForm() {
       return document.querySelector('.calculator-form');
     }
 
-    // The markup comes from the same partial the server renders, so a message
-    // written here reads the same as one the server sent.
+    {# The markup comes from the same partial the server renders, so a message #}
+    {# written here reads the same as one the server sent. #}
     function showResultError(message) {
       const markup = document.getElementById('result-error').content.cloneNode(true);
       markup.querySelector('.error-text').textContent = message;
@@ -580,9 +580,9 @@
       scrollResultIntoView();
     }
 
-    // The result area sits below the form on a narrow screen, so a sheet or a
-    // message would otherwise land off screen. The message plate wins over the
-    // whole area, so the reader lands on the text itself.
+    {# The result area sits below the form on a narrow screen, so a sheet or a #}
+    {# message would otherwise land off screen. The message plate wins over the #}
+    {# whole area, so the reader lands on the text itself. #}
     function scrollResultIntoView() {
       const result = document.getElementById('result');
       const target = result.querySelector('.download-link')
@@ -591,8 +591,8 @@
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // Read the input, not window.turnstile.getResponse: the input is what the
-    // form submits, and it is what the browser tests' stand-in widget fills.
+    {# Read the input, not window.turnstile.getResponse: the input is what the #}
+    {# form submits, and it is what the browser tests' stand-in widget fills. #}
     function turnstileToken() {
       const input = calculatorForm().querySelector('input[name="cf-turnstile-response"]');
       return input ? input.value : '';
@@ -606,10 +606,10 @@
       throw new Error('the Turnstile widget produced no token');
     }
 
-    // The session token expires with the server's SESSION_TTL, and it is tied to
-    // the address it was issued to. A tab the browser put to sleep, or a switch
-    // from Wi-Fi to mobile data, leaves the form holding a token /calculate
-    // refuses. Everything entered is still on screen, so repair it in place.
+    {# The session token expires with the server's SESSION_TTL, and it is tied to #}
+    {# the address it was issued to. A tab the browser put to sleep, or a switch #}
+    {# from Wi-Fi to mobile data, leaves the form holding a token /calculate #}
+    {# refuses. Everything entered is still on screen, so repair it in place. #}
     async function renewSessionAndResend() {
       try {
         const response = await fetch('/session', { method: 'POST' });
@@ -617,7 +617,7 @@
         const data = await response.json();
         const form = calculatorForm();
         form.querySelector('input[name="session_token"]').value = data.session_token;
-        // holdSubmit waits for the new Turnstile token and shows the spinner.
+        {# holdSubmit waits for the new Turnstile token and shows the spinner. #}
         form.requestSubmit();
       } catch (error) {
         console.warn('Could not renew the session:', error);
@@ -626,26 +626,26 @@
       }
     }
 
-    // Called when the Download button belongs to a sheet older than the server
-    // keeps results for.
+    {# Called when the Download button belongs to a sheet older than the server #}
+    {# keeps results for. #}
     function recalculateThenDownload() {
       downloadAfterRecalculate = true;
       const form = calculatorForm();
-      // A submit already on its way brings in the fresh result by itself,
-      // whether it is still waiting or already sent.
+      {# A submit already on its way brings in the fresh result by itself, #}
+      {# whether it is still waiting or already sent. #}
       if (form.matches('.submit-pending, .htmx-request')) return;
       form.requestSubmit();
     }
 
-    // htmx drops non-2xx bodies unless we opt in. Our own error partials are
-    // swapped; anything else gets a message written here, so no press of
-    // Calculate ends in silence.
+    {# htmx drops non-2xx bodies unless we opt in. Our own error partials are #}
+    {# swapped; anything else gets a message written here, so no press of #}
+    {# Calculate ends in silence. #}
     document.body.addEventListener('htmx:beforeSwap', (event) => {
       const xhr = event.detail.xhr;
       if (event.detail.target.id !== 'result' || xhr.status < 400) return;
       if (xhr.getResponseHeader('HX-Trigger') === SESSION_AGAIN_EVENT && !sessionRenewalTried) {
-        // Repair instead of showing the refusal. The message in the body is kept
-        // back for a second refusal, which means renewing did not help.
+        {# Repair instead of showing the refusal. The message in the body is kept #}
+        {# back for a second refusal, which means renewing did not help. #}
         sessionRenewalTried = true;
         event.detail.shouldSwap = false;
         renewSessionAndResend();
@@ -662,7 +662,7 @@
       showResultError(GENERAL_ERROR_MESSAGE);
     });
 
-    // No response at all, so beforeSwap never runs for either of these.
+    {# No response at all, so beforeSwap never runs for either of these. #}
     document.body.addEventListener('htmx:sendError', (event) => {
       if (!event.detail.elt.classList.contains('calculator-form')) return;
       showResultError(NETWORK_MESSAGE);
@@ -673,14 +673,14 @@
       showResultError(TIMEOUT_MESSAGE);
     });
 
-    // Turnstile tokens are single-use, and the page stays put after a submission,
-    // so the widget has to be reset before a retry. afterRequest, not afterSwap:
-    // the token is spent on rejected and invalid submissions too, which don't swap.
+    {# Turnstile tokens are single-use, and the page stays put after a submission, #}
+    {# so the widget has to be reset before a retry. afterRequest, not afterSwap: #}
+    {# the token is spent on rejected and invalid submissions too, which don't swap. #}
     document.body.addEventListener('htmx:afterRequest', (event) => {
       if (!event.detail.elt.classList.contains('calculator-form')) return;
-      // A request that worked ends the one-renewal-per-refusal rule, so a
-      // session that dies later is renewed again. This is the only place a
-      // renewal is known to have succeeded: beforeSwap sees refusals alone.
+      {# A request that worked ends the one-renewal-per-refusal rule, so a #}
+      {# session that dies later is renewed again. This is the only place a #}
+      {# renewal is known to have succeeded: beforeSwap sees refusals alone. #}
       if (event.detail.xhr && event.detail.xhr.status < 400) sessionRenewalTried = false;
       if (window.turnstile) window.turnstile.reset('.cf-turnstile');
     });
@@ -690,20 +690,20 @@
       const downloadForm = event.detail.target.querySelector('form[action="/download.pdf"]');
       if (downloadForm) lastResultAt = Date.now();
       if (downloadAfterRecalculate) {
-        // A calculation that failed swapped in a message and no download form.
-        // The message stands on its own, so drop the download.
+        {# A calculation that failed swapped in a message and no download form. #}
+        {# The message stands on its own, so drop the download. #}
         downloadAfterRecalculate = false;
         if (downloadForm) downloadForm.requestSubmit();
       }
-      // aria-live on #result already announces the update to screen readers;
-      // scroll only, don't steal focus (.focus() triggers a caret-browsing-style
-      // blinking cursor in the focused element for some Firefox users).
+      {# aria-live on #result already announces the update to screen readers; #}
+      {# scroll only, don't steal focus (.focus() triggers a caret-browsing-style #}
+      {# blinking cursor in the focused element for some Firefox users). #}
       scrollResultIntoView();
     });
 
-    // The download form is a plain POST, so a refusal would replace the whole page
-    // with the server's error body. A sheet left on screen by a sleeping tab points
-    // at a result the server has dropped, so calculate again first.
+    {# The download form is a plain POST, so a refusal would replace the whole page #}
+    {# with the server's error body. A sheet left on screen by a sleeping tab points #}
+    {# at a result the server has dropped, so calculate again first. #}
     document.getElementById('result').addEventListener('submit', (event) => {
       if (!event.target.matches('form[action="/download.pdf"]')) return;
       if (Date.now() - lastResultAt < RESULT_STALE_MS) return;
@@ -711,8 +711,8 @@
       recalculateThenDownload();
     });
 
-    // Rank a normalized timezone label against a normalized query:
-    // whole-label prefix > word prefix > substring > in-order characters.
+    {# Rank a normalized timezone label against a normalized query: #}
+    {# whole-label prefix > word prefix > substring > in-order characters. #}
     function timezoneMatchScore(candidate, query) {
       if (candidate.startsWith(query)) return 4;
       if (candidate.split(' ').some(word => word.startsWith(query))) return 3;
@@ -726,12 +726,12 @@
       return 1;
     }
 
-    // Whether the birth time field must stay clear of the phone's time picker.
-    // Instagram's and Facebook's in-app browsers close down when that picker
-    // opens, on iOS and on Android. Every other browser keeps the picker, which
-    // is the easier way to enter a time on a phone.
-    // The `time_input` query parameter forces one form or the other, so the
-    // plain field can be tried out in an ordinary browser.
+    {# Whether the birth time field must stay clear of the phone's time picker. #}
+    {# Instagram's and Facebook's in-app browsers close down when that picker #}
+    {# opens, on iOS and on Android. Every other browser keeps the picker, which #}
+    {# is the easier way to enter a time on a phone. #}
+    {# The `time_input` query parameter forces one form or the other, so the #}
+    {# plain field can be tried out in an ordinary browser. #}
     function wantsPlainTimeInput() {
       const forced = new URLSearchParams(window.location.search).get('time_input');
       if (forced === 'text') return true;
@@ -739,8 +739,8 @@
       return /Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent);
     }
 
-    // Every field Reset restores. timezoneOptions is deliberately NOT here: it
-    // is loaded once in init() and must survive a reset.
+    {# Every field Reset restores. timezoneOptions is deliberately NOT here: it #}
+    {# is loaded once in init() and must survive a reset. #}
     function initialFormState() {
       return {
         method: 'CNNR',
@@ -756,32 +756,32 @@
         latitude: '',
         longitude: '',
         timezoneMode: 'auto',
-        // The zone key, used to prefill the picker when the user switches to it.
+        {# The zone key, used to prefill the picker when the user switches to it. #}
         detectedTimezone: '',
-        // What the sheet will call this time zone. Differs from the key for a
-        // birth on sun-based local time, and there is a name even when the key
-        // is empty, so the status line reads this one.
+        {# What the sheet will call this time zone. Differs from the key for a #}
+        {# birth on sun-based local time, and there is a name even when the key #}
+        {# is empty, so the status line reads this one. #}
         timezoneLabel: '',
-        // Written only by a /timezone reply, cleared by any edit that could
-        // change it. Empty means "not resolved yet", never "unchanged".
+        {# Written only by a /timezone reply, cleared by any edit that could #}
+        {# change it. Empty means "not resolved yet", never "unchanged". #}
         timezoneTicket: '',
         timezoneNotes: [],
-        // Counts lookups so a slow reply cannot overwrite a newer one. A
-        // pre-1970 date searches the historical border maps and can take much
-        // longer than the modern date entered after it.
+        {# Counts lookups so a slow reply cannot overwrite a newer one. A #}
+        {# pre-1970 date searches the historical border maps and can take much #}
+        {# longer than the modern date entered after it. #}
         timezoneRequestId: 0,
-        // The lookup now running, so a submit can wait for it. Null when none is.
+        {# The lookup now running, so a submit can wait for it. Null when none is. #}
         timezonePending: null,
         timezone: '',
         timezoneQuery: '',
-        // The zones on offer, best match first. The arrow keys walk this one.
+        {# The zones on offer, best match first. The arrow keys walk this one. #}
         timezoneSuggestions: [],
-        // The same zones as rows to render, with region headings mixed in.
+        {# The same zones as rows to render, with region headings mixed in. #}
         timezoneRows: [],
-        // Each zone's UTC offset on the birth date, keyed by zone name, from
-        // /timezone-offsets. Empty until the birth date and time are both set,
-        // and emptied again when either changes: a label is either the offset
-        // for the date in the form or no offset at all.
+        {# Each zone's UTC offset on the birth date, keyed by zone name, from #}
+        {# /timezone-offsets. Empty until the birth date and time are both set, #}
+        {# and emptied again when either changes: a label is either the offset #}
+        {# for the date in the form or no offset at all. #}
         timezoneOffsets: {},
         zoneOffsetsRequestId: 0,
         timezoneActiveIndex: -1,
@@ -795,11 +795,11 @@
       return {
         ...initialFormState(),
         timezoneOptions: [],
-        // The browser decides this once, so Reset must not touch it.
+        {# The browser decides this once, so Reset must not touch it. #}
         plainTimeInput: false,
-        // True while holdSubmit waits for what the submit needs. Kept out of
-        // initialFormState so pressing Reset during a wait cannot clear it and
-        // let a second press start a second wait.
+        {# True while holdSubmit waits for what the submit needs. Kept out of #}
+        {# initialFormState so pressing Reset during a wait cannot clear it and #}
+        {# let a second press start a second wait. #}
         submitPending: false,
 
         init() {
@@ -817,11 +817,11 @@
             name,
             normalized: name.toLowerCase().replaceAll('/', ' '),
           }));
-          // Switching to the list starts on the zone that was already detected,
-          // so the user does not have to find it again. The search field starts
-          // empty, so the list shows every zone with that one marked. Every
-          // switch also asks for the zone again, because each mode sends
-          // different fields.
+          {# Switching to the list starts on the zone that was already detected, #}
+          {# so the user does not have to find it again. The search field starts #}
+          {# empty, so the list shows every zone with that one marked. Every #}
+          {# switch also asks for the zone again, because each mode sends #}
+          {# different fields. #}
           this.$watch('timezoneMode', mode => {
             if (mode === 'list') {
               if (!this.timezone && this.detectedTimezone) {
@@ -832,13 +832,13 @@
               this.revealChosenTimezone();
               this.fetchZoneOffsets();
             }
-            // Runs last, so a zone filled in above goes with the request.
+            {# Runs last, so a zone filled in above goes with the request. #}
             this.fetchTimezone();
           });
         },
 
         async searchPlaces() {
-          // Manual-coordinate mode turns the place field into a plain text input.
+          {# Manual-coordinate mode turns the place field into a plain text input. #}
           if (this.manualCoords) { this.suggestions = []; return; }
           this.activeIndex = -1;
           this.placesError = '';
@@ -869,9 +869,9 @@
           }
         },
 
-        // Keep coordinates at four decimals, about 11 m on the ground. Both
-        // ways of setting a place agree that way, so the same place always asks
-        // the same question and the server can reuse its answer.
+        {# Keep coordinates at four decimals, about 11 m on the ground. Both #}
+        {# ways of setting a place agree that way, so the same place always asks #}
+        {# the same question and the server can reuse its answer. #}
         roundCoordinates() {
           for (const field of ['latitude', 'longitude']) {
             const value = Number(this[field]);
@@ -890,8 +890,8 @@
           this.fetchTimezone();
         },
 
-        // On small screens the help tooltip is position:fixed; align its top with the
-        // trigger so it sits at mouse/trigger level instead of pinned to a screen edge.
+        {# On small screens the help tooltip is position:fixed; align its top with the #}
+        {# trigger so it sits at mouse/trigger level instead of pinned to a screen edge. #}
         positionTip(event) {
           const tip = event.currentTarget.nextElementSibling;
           if (!tip) return;
@@ -923,7 +923,7 @@
               break;
             case 'Enter':
               if (this.activeIndex >= 0) {
-                event.preventDefault();  // keep Enter from submitting the form
+                event.preventDefault();  {# keep Enter from submitting the form #}
                 this.selectPlace(this.suggestions[this.activeIndex]);
               }
               break;
@@ -933,62 +933,62 @@
           }
         },
 
-        // Forget a resolved time zone, as soon as any input behind it is touched.
-        // A stale ticket would print a sheet for the wrong zone. An empty one is
-        // refused on submit instead.
+        {# Forget a resolved time zone, as soon as any input behind it is touched. #}
+        {# A stale ticket would print a sheet for the wrong zone. An empty one is #}
+        {# refused on submit instead. #}
         invalidateTimezone() {
           this.timezoneTicket = '';
           this.timezoneNotes = [];
-          // Any reply still on its way was asked for before this edit, so it
-          // no longer describes what the form says. Move the id past it.
+          {# Any reply still on its way was asked for before this edit, so it #}
+          {# no longer describes what the form says. Move the id past it. #}
           this.timezoneRequestId += 1;
         },
 
-        // Ask /timezone, keeping the promise so holdSubmit can wait for this
-        // same lookup. Callers fire and forget; none of them await it.
-        //
-        // The form also calls this when /calculate answers with the ask-again event
-        // (main.TIMEZONE_AGAIN_EVENT): the server no longer holds the zone this
-        // ticket points at, and without a new one every further press of Calculate
-        // would send the same dead ticket.
+        {# Ask /timezone, keeping the promise so holdSubmit can wait for this #}
+        {# same lookup. Callers fire and forget; none of them await it. #}
+
+        {# The form also calls this when /calculate answers with the ask-again event #}
+        {# (main.TIMEZONE_AGAIN_EVENT): the server no longer holds the zone this #}
+        {# ticket points at, and without a new one every further press of Calculate #}
+        {# would send the same dead ticket. #}
         fetchTimezone() {
           this.timezonePending = this.lookUpTimezone();
           return this.timezonePending;
         },
 
-        // Let the submit through once everything it needs is in hand: a time
-        // zone ticket and a Turnstile token.
-        //
-        // Alpine calls this from @htmx:confirm on the form. htmx fires that before
-        // it sends, and it allows holding the send back and starting it again later.
-        // The hold is needed because pressing Calculate is itself what ends the edit
-        // in a field that resolves when focus leaves it: the lookup and the submit
-        // start in the same moment, with no time zone between them. Sending then
-        // would have the server refuse a form that is in fact complete.
-        //
-        // The Turnstile token is held for the same reason. htmx:afterRequest resets
-        // the widget, and the new token takes a moment to arrive, so a press that
-        // lands in that moment finds the token field empty.
-        //
-        // submitPending drives the spinner. htmx has not sent yet, so it has not
-        // marked the form, and without this the whole wait shows nothing.
+        {# Let the submit through once everything it needs is in hand: a time #}
+        {# zone ticket and a Turnstile token. #}
+
+        {# Alpine calls this from @htmx:confirm on the form. htmx fires that before #}
+        {# it sends, and it allows holding the send back and starting it again later. #}
+        {# The hold is needed because pressing Calculate is itself what ends the edit #}
+        {# in a field that resolves when focus leaves it: the lookup and the submit #}
+        {# start in the same moment, with no time zone between them. Sending then #}
+        {# would have the server refuse a form that is in fact complete. #}
+
+        {# The Turnstile token is held for the same reason. htmx:afterRequest resets #}
+        {# the widget, and the new token takes a moment to arrive, so a press that #}
+        {# lands in that moment finds the token field empty. #}
+
+        {# submitPending drives the spinner. htmx has not sent yet, so it has not #}
+        {# marked the form, and without this the whole wait shows nothing. #}
         async holdSubmit(event) {
           if (this.submitPending) {
-            event.preventDefault();  // a wait is already running; ignore this press
+            event.preventDefault();  {# a wait is already running; ignore this press #}
             return;
           }
-          if (this.timezoneTicket && turnstileToken()) return;  // send now
+          if (this.timezoneTicket && turnstileToken()) return;  {# send now #}
           event.preventDefault();
           this.submitPending = true;
           try {
-            // Both at once: the zone lookup and the bot check do not depend on
-            // each other, so the wait is the longer one, not the two added up.
+            {# Both at once: the zone lookup and the bot check do not depend on #}
+            {# each other, so the wait is the longer one, not the two added up. #}
             await Promise.all([this.timezonePending, waitForTurnstileToken()]);
-            // true skips a second htmx:confirm, which would hold this send again.
+            {# true skips a second htmx:confirm, which would hold this send again. #}
             event.detail.issueRequest(true);
           } catch (error) {
-            // Nothing was sent, so no result arrives and htmx:afterSwap never
-            // runs. Say so, and drop a download waiting on this calculation.
+            {# Nothing was sent, so no result arrives and htmx:afterSwap never #}
+            {# runs. Say so, and drop a download waiting on this calculation. #}
             console.warn('Submit could not start:', error);
             downloadAfterRecalculate = false;
             showResultError(SUBMIT_HELD_MESSAGE);
@@ -1000,23 +1000,23 @@
         async lookUpTimezone() {
           this.invalidateTimezone();
           const requestId = this.timezoneRequestId;
-          // The birth date decides which time zone applied, and the birth time
-          // decides how it reads, so neither can be left out. Read both now:
-          // $refs is only reachable while the change that called this is still
-          // being handled, and the wait below ends that.
+          {# The birth date decides which time zone applied, and the birth time #}
+          {# decides how it reads, so neither can be left out. Read both now: #}
+          {# $refs is only reachable while the change that called this is still #}
+          {# being handled, and the wait below ends that. #}
           const birthDate = this.$refs.birthDate?.value;
           const birthTime = this.$refs.birthTime?.value;
-          // Wait before asking. Changing the mode or the offset touches several
-          // fields in a row, and this way that sends one request instead of
-          // several: every change moves the id, so the waits it started before
-          // stop here. The answer is already cleared, so nothing stale can be
-          // submitted during the wait.
+          {# Wait before asking. Changing the mode or the offset touches several #}
+          {# fields in a row, and this way that sends one request instead of #}
+          {# several: every change moves the id, so the waits it started before #}
+          {# stop here. The answer is already cleared, so nothing stale can be #}
+          {# submitted during the wait. #}
           await new Promise(resolve => setTimeout(resolve, 400));
-          if (requestId !== this.timezoneRequestId) return;  // superseded
+          if (requestId !== this.timezoneRequestId) return;  {# superseded #}
           if (this.latitude === '' || this.longitude === '' || !birthDate || !birthTime) return;
-          // In 'list' and 'offset' mode the user has named the zone. Send it, so the
-          // answer is about the zone the sheet will use, not the one the birth
-          // place implies. An incomplete choice is not worth asking about yet.
+          {# In 'list' and 'offset' mode the user has named the zone. Send it, so the #}
+          {# answer is about the zone the sheet will use, not the one the birth #}
+          {# place implies. An incomplete choice is not worth asking about yet. #}
           const chosenZone = this.timezoneMode === 'list' ? this.timezone : '';
           const chosenOffset = this.timezoneMode === 'offset' ? this.utcOffsetSign + this.utcOffsetTime : '';
           if (this.timezoneMode === 'list' && !chosenZone) return;
@@ -1030,20 +1030,20 @@
             utc_offset: chosenOffset,
             on_summer_time: this.timezoneMode === 'offset' ? '' : this.onSummerTime,
           });
-          // Both failure exits below leave the resolved zone empty. That is the
-          // safe outcome: no zone at all, rather than one that does not fit the
-          // entered details. Both log, so a lookup that quietly stops working
-          // can be traced.
+          {# Both failure exits below leave the resolved zone empty. That is the #}
+          {# safe outcome: no zone at all, rather than one that does not fit the #}
+          {# entered details. Both log, so a lookup that quietly stops working #}
+          {# can be traced. #}
           try {
             const response = await fetch(`/timezone?${params}`);
-            if (requestId !== this.timezoneRequestId) return;  // superseded
+            if (requestId !== this.timezoneRequestId) return;  {# superseded #}
             if (!response.ok) {
-              // A refusal carries a message written for the person filling the
-              // form. Show it where the notes go. Without it the page looks
-              // like nothing happened, and the refusal surfaces only after
-              // Calculate, as an error about details that never changed.
+              {# A refusal carries a message written for the person filling the #}
+              {# form. Show it where the notes go. Without it the page looks #}
+              {# like nothing happened, and the refusal surfaces only after #}
+              {# Calculate, as an error about details that never changed. #}
               const detail = await response.json().catch(() => null);
-              if (requestId !== this.timezoneRequestId) return;  // superseded
+              if (requestId !== this.timezoneRequestId) return;  {# superseded #}
               if (detail && detail.detail) {
                 this.timezoneNotes = [{ message: detail.detail, kind: 'caution' }];
               }
@@ -1051,7 +1051,7 @@
               return;
             }
             const data = await response.json();
-            if (requestId !== this.timezoneRequestId) return;  // superseded
+            if (requestId !== this.timezoneRequestId) return;  {# superseded #}
             this.timezoneTicket = data.timezone_ticket;
             this.timezoneNotes = data.notes;
             this.detectedTimezone = data.timezone || '';
@@ -1061,15 +1061,15 @@
           }
         },
 
-        // Offer every zone, leaving the chosen one alone. This is how the list
-        // stands whenever the search field is empty.
+        {# Offer every zone, leaving the chosen one alone. This is how the list #}
+        {# stands whenever the search field is empty. #}
         showAllTimezones() {
           this.timezoneSuggestions = this.timezoneOptions;
           this.buildTimezoneRows();
         },
 
         searchTimezones() {
-          this.timezone = '';  // entering text invalidates the committed choice
+          this.timezone = '';  {# entering text invalidates the committed choice #}
           this.invalidateTimezone();
           this.timezoneActiveIndex = -1;
           const query = this.timezoneQuery.trim().toLowerCase()
@@ -1087,9 +1087,9 @@
           if (this.$refs.timezoneList) this.$refs.timezoneList.scrollTop = 0;
         },
 
-        // Turn timezoneSuggestions into the rows the list renders. A search
-        // orders the zones by how well they match, so headings would break that
-        // order: they are added only while the search field is empty.
+        {# Turn timezoneSuggestions into the rows the list renders. A search #}
+        {# orders the zones by how well they match, so headings would break that #}
+        {# order: they are added only while the search field is empty. #}
         buildTimezoneRows() {
           const grouped = !this.timezoneQuery.trim();
           const rows = [];
@@ -1112,9 +1112,9 @@
 
         selectTimezone(option) {
           this.timezone = option.key;
-          // The search field filters the list, it does not show the choice.
-          // Emptying it brings the whole list back with the zone marked, so the
-          // zones around it can be compared.
+          {# The search field filters the list, it does not show the choice. #}
+          {# Emptying it brings the whole list back with the zone marked, so the #}
+          {# zones around it can be compared. #}
           this.timezoneQuery = '';
           this.showAllTimezones();
           this.revealChosenTimezone();
@@ -1130,17 +1130,17 @@
           if (exact) this.selectTimezone(exact);
         },
 
-        // Scroll the chosen zone to the middle of the list, so the zones before
-        // and after it are visible too. The rows are built first, in the same
-        // call, so the scrolling waits for them to render.
+        {# Scroll the chosen zone to the middle of the list, so the zones before #}
+        {# and after it are visible too. The rows are built first, in the same #}
+        {# call, so the scrolling waits for them to render. #}
         revealChosenTimezone() {
           this.timezoneActiveIndex = this.timezoneSuggestions
             .findIndex(option => option.key === this.timezone);
           this.$nextTick(() => this.scrollToActiveTimezone(true));
         },
 
-        // Move the list to the active row. Centered on request, otherwise by the
-        // least that brings the row inside. Only the list scrolls, never the page.
+        {# Move the list to the active row. Centered on request, otherwise by the #}
+        {# least that brings the row inside. Only the list scrolls, never the page. #}
         scrollToActiveTimezone(centered) {
           const list = this.$refs.timezoneList;
           const row = document.getElementById('timezone-option-' + this.timezoneActiveIndex);
@@ -1156,17 +1156,17 @@
           }
         },
 
-        // Forget the offsets shown in the list, as soon as the birth date or
-        // time changes. They were worked out for the old one.
+        {# Forget the offsets shown in the list, as soon as the birth date or #}
+        {# time changes. They were worked out for the old one. #}
         invalidateZoneOffsets() {
           this.timezoneOffsets = {};
           this.zoneOffsetsRequestId += 1;
           this.relabelTimezones();
         },
 
-        // Ask /timezone-offsets, so the list can show what each zone stood at on
-        // the birth date. Only the date and time matter here: the birth place
-        // does not change any zone's offset.
+        {# Ask /timezone-offsets, so the list can show what each zone stood at on #}
+        {# the birth date. Only the date and time matter here: the birth place #}
+        {# does not change any zone's offset. #}
         async fetchZoneOffsets() {
           if (this.timezoneMode !== 'list') return;
           const birthDate = this.$refs.birthDate?.value;
@@ -1179,7 +1179,7 @@
             const response = await fetch(`/timezone-offsets?${params}`);
             if (!response.ok) return;
             const data = await response.json();
-            if (requestId !== this.zoneOffsetsRequestId) return;  // superseded
+            if (requestId !== this.zoneOffsetsRequestId) return;  {# superseded #}
             this.timezoneOffsets = data.offsets;
             this.relabelTimezones();
           } catch (error) {
@@ -1187,8 +1187,8 @@
           }
         },
 
-        // Rebuild the rows so the labels pick up the offsets, keeping the list
-        // where the reader left it. Only the labels change, never the order.
+        {# Rebuild the rows so the labels pick up the offsets, keeping the list #}
+        {# where the reader left it. Only the labels change, never the order. #}
         relabelTimezones() {
           if (this.timezoneMode !== 'list') return;
           const list = this.$refs.timezoneList;
@@ -1221,14 +1221,14 @@
               break;
             case 'Enter':
               if (this.timezoneActiveIndex >= 0) {
-                event.preventDefault();  // keep Enter from submitting the form
+                event.preventDefault();  {# keep Enter from submitting the form #}
                 this.selectTimezone(this.timezoneSuggestions[this.timezoneActiveIndex]);
               }
               break;
             case 'Escape':
-              // Clear the search and show every zone again. Not through
-              // searchTimezones: that one drops the chosen zone, and Escape
-              // undoes the search.
+              {# Clear the search and show every zone again. Not through #}
+              {# searchTimezones: that one drops the chosen zone, and Escape #}
+              {# undoes the search. #}
               this.timezoneQuery = '';
               this.showAllTimezones();
               this.revealChosenTimezone();
@@ -1236,18 +1236,18 @@
           }
         },
 
-        // The input pattern already limits hours to 0-16; only 16:01-16:59 slip past.
+        {# The input pattern already limits hours to 0-16; only 16:01-16:59 slip past. #}
         utcOffsetExceedsRange() {
           const match = this.utcOffsetTime.match(/^(\d{1,2}):(\d{2})$/);
           return match !== null && Number(match[1]) * 60 + Number(match[2]) > 16 * 60;
         },
 
-        // Put the plain field into HH:MM shape on change: "930", "0930" and
-        // "9:30" all become "09:30". The server reads the birth time as HH:MM
-        // and refuses the other three, and so does the field's own pattern. The
-        // colon is optional here because the numeric keypad on a phone has no
-        // colon key. Anything else is left as it is, and the pattern then blocks
-        // the submit.
+        {# Put the plain field into HH:MM shape on change: "930", "0930" and #}
+        {# "9:30" all become "09:30". The server reads the birth time as HH:MM #}
+        {# and refuses the other three, and so does the field's own pattern. The #}
+        {# colon is optional here because the numeric keypad on a phone has no #}
+        {# colon key. Anything else is left as it is, and the pattern then blocks #}
+        {# the submit. #}
         padTimeText() {
           if (!this.plainTimeInput) return;
           const field = this.$refs.birthTime;
@@ -1258,19 +1258,19 @@
 
         resetForm() {
           Object.assign(this, initialFormState());
-          // Native-only fields (no x-model) — clear by hand.
+          {# Native-only fields (no x-model) – clear by hand. #}
           this.$refs.name.value = '';
           this.$refs.birthDate.value = '';
           this.$refs.birthTime.value = '';
           document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
         },
 
-        // Test-mode only: apply a tests/fixtures/*.json fixture (field names
-        // match app/forms.py FIELDS; `location_name` fills the place field, which
-        // submits as the location name) to the form, same fields resetForm() clears.
+        {# Test-mode only: apply a tests/fixtures/*.json fixture (field names #}
+        {# match app/forms.py FIELDS; `location_name` fills the place field, which #}
+        {# submits as the location name) to the form, same fields resetForm() clears. #}
         applyFixture(data) {
-          // Start from the defaults, then override only what the fixture sets,
-          // so a field added to the form can't be left stale here.
+          {# Start from the defaults, then override only what the fixture sets, #}
+          {# so a field added to the form can't be left stale here. #}
           Object.assign(this, initialFormState(), {
             method: data.method,
             namkhaType: data.namkha_type,
@@ -1288,18 +1288,18 @@
           this.$refs.name.value = data.name || '';
           this.$refs.birthDate.value = data.birth_date;
           this.$refs.birthTime.value = data.birth_time;
-          // Fixtures carry no resolved zone: it would be stale the moment the
-          // file was written. Ask for one now, as the form is complete. Setting
-          // the date and time above fires no change event, so both asks are made
-          // here rather than by the fields.
+          {# Fixtures carry no resolved zone: it would be stale the moment the #}
+          {# file was written. Ask for one now, as the form is complete. Setting #}
+          {# the date and time above fires no change event, so both asks are made #}
+          {# here rather than by the fields. #}
           this.fetchTimezone();
           this.fetchZoneOffsets();
         },
       };
     }
     </script>
-    <!-- Zoom lightbox: a tapped/clicked result page opens here, pan- and
-       pinch-zoomable on a dark blurred backdrop. -->
+    {# Zoom lightbox: a tapped/clicked result page opens here, pan- and
+       pinch-zoomable on a dark blurred backdrop. #}
     <div id="lightbox"
          role="dialog"
          aria-modal="true"
@@ -1309,7 +1309,7 @@
               class="lightbox-btn lightbox-close"
               data-lightbox-close
               aria-label="Close enlarged view">&#x2715;</button>
-      <!-- Pointer-device hint only: the touch gestures (pinch, drag) need no telling. -->
+      {# Pointer-device hint only: the touch gestures (pinch, drag) need no telling. #}
       <p class="lightbox-hint">
         <span>Ctrl + scroll to zoom</span>
         <span>Shift + scroll sideways</span>
@@ -1320,10 +1320,10 @@
                 aria-label="Hide the controls hint">&#x2715;</button>
       </p>
       <div class="lightbox-stage" data-lightbox-stage></div>
-      <!-- Page turners: shown only when the result has more than one page, and only
-         on pointer devices — touch swipes left/right instead. -->
-      <!-- Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
-         so a text arrow looks pushed down however the button centers it. -->
+      {# Page turners: shown only when the result has more than one page, and only
+         on pointer devices – touch swipes left/right instead. #}
+      {# Chevrons as inline SVG, not ‹ / › : the glyphs' ink sits low in the em box,
+         so a text arrow looks pushed down however the button centers it. #}
       <button type="button"
               class="lightbox-btn lightbox-nav lightbox-nav-prev"
               data-lightbox-page="prev"
