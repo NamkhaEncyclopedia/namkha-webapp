@@ -213,11 +213,6 @@ def test_the_spinner_runs_through_the_wait_before_the_send(page, live_server):
 def test_a_stale_download_calculates_again_first(page, live_server):
     """What the Download button does on a sheet the server has forgotten."""
     calculated = []
-    downloaded = []
-
-    def answer_download(route):
-        downloaded.append(route.request.post_data)
-        route.fulfill(status=204)  # no body, so the page stays put
 
     # The shape _result.html gives a result: the download form the page looks for.
     stub_calculate(
@@ -229,7 +224,8 @@ def test_a_stale_download_calculates_again_first(page, live_server):
             "</form>"
         ),
     )
-    page.route("**/download.pdf", answer_download)
+    # No body, so the page stays put.
+    page.route("**/download.pdf", lambda route: route.fulfill(status=204))
     page.goto(live_server)
     fill_a_calculable_birth(page)
 
@@ -239,11 +235,12 @@ def test_a_stale_download_calculates_again_first(page, live_server):
 
     # The button is on screen either way, so wait for the download request
     # itself. Waiting on the sheet would pass on the stale one already shown.
+    # The request, not the response: Firefox reports no response for a
+    # navigation answered with 204.
     page.evaluate("lastResultAt = 0")
-    with page.expect_response("**/download.pdf"):
+    with page.expect_request("**/download.pdf"):
         page.locator(".download-link").click()
     assert len(calculated) == 2, "Download did not calculate again first"
-    assert len(downloaded) == 1, "the fresh result was not downloaded"
 
 
 def test_reset_during_the_wait_abandons_the_submit(page, live_server):
