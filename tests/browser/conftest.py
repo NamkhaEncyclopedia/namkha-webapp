@@ -1,8 +1,11 @@
 """Browser E2E fixtures.
 
 The whole directory is skipped cleanly unless the opt-in `browser` poetry group is
-installed (`poetry install --with browser` + `playwright install chromium`), so the
-default backend suite runs without a browser.
+installed (`poetry install --with browser`), so the default backend suite runs
+without a browser.
+
+The browsers run in the Playwright container, not on the host: Playwright builds
+them for Ubuntu and Debian only. README.md "Testing" has the commands.
 """
 
 import contextlib
@@ -75,6 +78,23 @@ else:
                 body=_TURNSTILE_STUB,
             ),
         )
+
+    @pytest.fixture(scope="session")
+    def launch_browser(browser_type_launch_args, browser_type):
+        """Replaces the pytest-playwright fixture of the same name.
+
+        With PW_TEST_CONNECT_WS_ENDPOINT set, the browser comes from the
+        Playwright server at that address, and the launch arguments (--headed,
+        --slowmo) are ignored. Without it, a local browser starts as usual.
+        """
+        endpoint = os.environ.get("PW_TEST_CONNECT_WS_ENDPOINT")
+
+        def launch(**kwargs):
+            if endpoint:
+                return browser_type.connect(endpoint)
+            return browser_type.launch(**{**browser_type_launch_args, **kwargs})
+
+        return launch
 
     @pytest.fixture(scope="session")
     def live_server():

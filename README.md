@@ -145,9 +145,27 @@ Two layers: a backend suite that runs on its own, and an opt-in browser suite.
 ```sh
 poetry run pytest                        # backend + render tests, browser auto-skipped
 poetry install --with browser            # add the browser test layer
-poetry run playwright install chromium   # one-time browser download
-poetry run pytest tests/browser          # Playwright end-to-end tests
 ```
+
+Playwright supports only Ubuntu and Debian hosts. The browser suite therefore
+uses the Playwright server in a container. The tests stay on the host and
+connect to it. The image version must match the installed `playwright` package.
+
+```sh
+version=$(poetry run python -c "import importlib.metadata as m; print(m.version('playwright'))")
+podman run -d --rm --init --name namkha-playwright --network host \
+  --user pwuser --workdir /home/pwuser \
+  "mcr.microsoft.com/playwright:v${version}-noble" \
+  /bin/sh -c "npx -y playwright@${version} run-server --port 3000 --host 127.0.0.1"
+
+export PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3000/
+poetry run pytest tests/browser --browser chromium   # Playwright end-to-end tests
+
+podman stop namkha-playwright
+```
+
+`--network host` lets the browsers in the container reach the test server on
+`127.0.0.1`. Docker accepts the same commands.
 
 Setting the `NAMKHA_TEST_MODE=1` environment variable adds a sample-data picker to the form, useful for manual testing.
 
