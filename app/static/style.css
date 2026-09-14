@@ -897,7 +897,8 @@ button.download-link {
   background: var(--download-button-bg);
   border: none;
   border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
+  /* Same padding as the Calculate button, so both reach a 44 px tap target. */
+  padding: calc(0.85rem + 1px) 1rem calc(0.85rem - 1px);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   text-decoration: none;
   font-size: 1rem;
