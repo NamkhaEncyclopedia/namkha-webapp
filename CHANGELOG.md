@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- "Choose from list" opens on the detected time zone in every browser. In some
+  browsers the list stayed at the top when the zone offsets arrived quickly.
+
 ## [0.1.0a5] – 2026-09-10
 
 ### Changed

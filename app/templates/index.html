@@ -801,6 +801,9 @@
         {# initialFormState so pressing Reset during a wait cannot clear it and #}
         {# let a second press start a second wait. #}
         submitPending: false,
+        {# True from revealChosenTimezone until its scroll runs. Kept out of #}
+        {# initialFormState, like submitPending, so Reset cannot clear it mid-wait. #}
+        timezoneRevealPending: false,
 
         init() {
           this.$watch('method', value => {
@@ -1136,7 +1139,11 @@
         revealChosenTimezone() {
           this.timezoneActiveIndex = this.timezoneSuggestions
             .findIndex(option => option.key === this.timezone);
-          this.$nextTick(() => this.scrollToActiveTimezone(true));
+          this.timezoneRevealPending = true;
+          this.$nextTick(() => {
+            this.timezoneRevealPending = false;
+            this.scrollToActiveTimezone(true);
+          });
         },
 
         {# Move the list to the active row. Centered on request, otherwise by the #}
@@ -1189,10 +1196,13 @@
 
         {# Rebuild the rows so the labels pick up the offsets, keeping the list #}
         {# where the reader left it. Only the labels change, never the order. #}
+        {# While a reveal still waits to scroll, the list is not yet where it #}
+        {# will be, so only the rows are rebuilt. The reveal then scrolls to the #}
+        {# chosen zone among the new rows. #}
         relabelTimezones() {
           if (this.timezoneMode !== 'list') return;
           const list = this.$refs.timezoneList;
-          if (!list) { this.buildTimezoneRows(); return; }
+          if (!list || this.timezoneRevealPending) { this.buildTimezoneRows(); return; }
           const rows = [...list.querySelectorAll('.timezone-suggestion')];
           const anchor = rows.find(row => row.offsetTop + row.offsetHeight > list.scrollTop);
           const anchorId = anchor ? anchor.id : '';
