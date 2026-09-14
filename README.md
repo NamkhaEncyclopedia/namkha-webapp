@@ -159,13 +159,20 @@ podman run -d --rm --init --name namkha-playwright --network host \
   /bin/sh -c "npx -y playwright@${version} run-server --port 3000 --host 127.0.0.1"
 
 export PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3000/
-poetry run pytest tests/browser --browser chromium   # Playwright end-to-end tests
+poetry run pytest tests/browser --browser chromium                       # desktop Chromium
+poetry run pytest tests/browser --browser firefox                        # desktop Firefox
+poetry run pytest tests/browser --browser webkit                         # desktop WebKit
+poetry run pytest tests/browser --browser webkit --device "iPhone 13"    # emulated iPhone 13
+poetry run pytest tests/browser --browser chromium --device "Pixel 5"    # emulated Pixel 5
 
 podman stop namkha-playwright
 ```
 
 `--network host` lets the browsers in the container reach the test server on
 `127.0.0.1`. Docker accepts the same commands.
+
+A device run keeps the desktop engine. It changes the screen size, the user agent,
+touch input, and the pixel ratio. Native date and time pickers do not change.
 
 Setting the `NAMKHA_TEST_MODE=1` environment variable adds a sample-data picker to the form, useful for manual testing.
 

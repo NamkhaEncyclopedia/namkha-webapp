@@ -7,6 +7,11 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 
 ## [Unreleased]
 
+### Added
+
+- The browser tests run on Chromium, Firefox and WebKit, and on emulated iPhone 13
+  and Pixel 5 screens. The browsers run in a Playwright container.
+
 ### Fixed
 
 - "Choose from list" opens on the detected time zone in every browser. In some
