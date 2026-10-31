@@ -21,6 +21,7 @@ from tests.browser.helpers import (
     STUB_ANSWER,
     error_body,
     fill_a_calculable_birth,
+    fill_birth_date,
     resolved_zone,
     stub_calculate,
 )
@@ -52,7 +53,7 @@ def test_pressing_calculate_straight_after_an_edit_sends_a_zone(page, live_serve
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     ticket = page.locator("input[name='timezone_ticket']")
     resolved_zone(ticket)
@@ -76,7 +77,7 @@ def test_a_forgotten_zone_is_asked_for_again(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     ticket = page.locator("input[name='timezone_ticket']")
     resolved_zone(ticket)
@@ -292,7 +293,7 @@ def test_place_autocomplete_fills_coords_and_timezone(page, live_server):
     page.goto(live_server)
     # The birth date and time come first: which zone applied depends on them, so
     # the lookup declines until both are set.
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     page.fill("#place", "Berlin")
     suggestion = page.locator(".place-suggestion").first
@@ -323,14 +324,14 @@ def test_editing_a_birth_detail_replaces_the_ticket(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     ticket = page.locator("input[name='timezone_ticket']")
     assert resolved_zone(ticket).for_birth_date == date(1985, 6, 15)
     for_1985 = ticket.input_value()
     # A different birth date can mean a different zone. What lands must be a
     # ticket for the new date, never the one worked out for the old one.
-    page.fill("#birth_date", "1940-06-15")
+    fill_birth_date(page, "1940-06-15")
     # Wait for the old ticket to go before reading: it is still in the field for a
     # moment, and reading then would look up the zone for the old date.
     expect(ticket).not_to_have_value(for_1985)
@@ -363,7 +364,7 @@ def test_timezone_modes_feed_hidden_inputs(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     # Disabled UI inputs aren't serialized; the hidden :value mirrors are what
     # posts. Entered coordinates are rounded to four decimals on leaving the
@@ -422,10 +423,10 @@ def test_status_line_shows_the_name_the_sheet_will_use(page, live_server):
     page.fill("#longitude-ui", "13.405")
     page.fill("#birth_time", "12:00")
 
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
 
-    page.fill("#birth_date", "1890-06-15")
+    fill_birth_date(page, "1890-06-15")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: mean solar time")
     # The key underneath is unchanged; only what the reader is shown differs.
     ticket = page.locator("input[name='timezone_ticket']")
@@ -458,7 +459,7 @@ def test_timezone_list_is_ready_before_any_search(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     expect(page.locator(".timezone-detected")).to_have_text("Detected: Europe/Berlin")
 
@@ -517,7 +518,7 @@ def test_timezone_labels_follow_the_birth_date(page, live_server):
     the offset of the birth date rather than today's. tzdata writes a space in a
     zone name as an underscore, which belongs in the key, not on screen."""
     page.goto(live_server)
-    page.fill("#birth_date", "1940-06-15")
+    fill_birth_date(page, "1940-06-15")
     page.fill("#birth_time", "12:00")
     page.select_option("#timezone-mode", "list")
     search = page.locator("#timezone-search")
@@ -527,7 +528,7 @@ def test_timezone_labels_follow_the_birth_date(page, live_server):
         "Asia/Kathmandu (UTC+5:30)"
     )
     # Moving the birth date past the change relabels the same zone.
-    page.fill("#birth_date", "2000-06-15")
+    fill_birth_date(page, "2000-06-15")
     expect(page.locator(".timezone-suggestion").first).to_have_text(
         "Asia/Kathmandu (UTC+5:45)"
     )
@@ -552,7 +553,7 @@ def test_the_list_keeps_its_place_when_offsets_arrive(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1940-06-15")
+    fill_birth_date(page, "1940-06-15")
     page.fill("#birth_time", "12:00")
     expect(page.locator(".timezone-detected")).to_contain_text("Europe/")
 
@@ -659,12 +660,12 @@ def test_a_late_reply_cannot_overwrite_a_newer_one(page, live_server):
 
     # Only the two edits below may be in flight when the replies are released.
     page.evaluate("() => { window.__heldTimezoneReplies = []; }")
-    page.fill("#birth_date", "1940-06-15")  # request 0, the slow one
+    fill_birth_date(page, "1940-06-15")  # request 0, the slow one
     # The form waits before asking, so let this request go out before the next
     # edit. Back to back the two would collapse into one, and there would be no
     # late reply to test.
     page.wait_for_function("() => window.__heldTimezoneReplies.length === 1")
-    page.fill("#birth_date", "1985-06-15")  # request 1, asked for later
+    fill_birth_date(page, "1985-06-15")  # request 1, asked for later
     page.wait_for_function("() => window.__heldTimezoneReplies.length === 2")
 
     # The newer request answers first, the older one straggles in behind it.
@@ -686,9 +687,9 @@ def test_edits_in_a_row_ask_once(page, live_server):
 
     page.evaluate("() => { window.__heldTimezoneReplies = []; }")
     # Three edits, close enough together that only the last one is asked about.
-    page.fill("#birth_date", "1985-06-15")
-    page.fill("#birth_date", "1986-06-15")
-    page.fill("#birth_date", "1987-06-15")
+    fill_birth_date(page, "1985-06-15")
+    fill_birth_date(page, "1986-06-15")
+    fill_birth_date(page, "1987-06-15")
     page.wait_for_function("() => window.__heldTimezoneReplies.length === 1")
     # Long enough for the two earlier waits to have ended, had they survived.
     page.wait_for_timeout(600)
@@ -723,7 +724,7 @@ def test_the_plain_birth_time_field_reaches_hh_mm(page, live_server, entered):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", entered)
     page.locator("#birth_time").blur()  # fill() alone fires no change event
 
@@ -740,9 +741,58 @@ def test_the_plain_birth_time_field_resolves_a_zone(page, live_server):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "930")
     page.locator("#birth_time").blur()
 
     ticket = page.locator("input[name='timezone_ticket']")
     assert resolved_zone(ticket).key == "Europe/Berlin"
+
+
+def test_a_day_the_month_lacks_blocks_submit(page, live_server):
+    """31 April does not exist. The day field must refuse it, not send a date
+    the browser rolled into May."""
+    page.goto(live_server)
+    fill_birth_date(page, "1849-04-31")
+    assert not page.locator("#birth-day").evaluate("el => el.checkValidity()")
+    expect(page.locator("input[name='birth_date']")).to_have_value("")
+
+
+def test_a_year_outside_the_library_range_blocks_submit(page, live_server):
+    page.goto(live_server)
+    fill_birth_date(page, "1500-06-15")
+    year = page.locator("#birth-year")
+    assert not year.evaluate("el => el.checkValidity()")
+    assert str(constants.BIRTH_YEARS[0]) in year.evaluate("el => el.validationMessage")
+    expect(page.locator("input[name='birth_date']")).to_have_value("")
+
+
+def test_a_one_digit_day_reaches_the_server_padded(page, live_server):
+    """The server reads the birth date as YYYY-MM-DD."""
+    page.goto(live_server)
+    page.get_by_text("Manually set coordinates").click()
+    page.fill("#latitude-ui", "52.52")
+    page.fill("#longitude-ui", "13.405")
+    page.fill("#birth_time", "12:00")
+    fill_birth_date(page, "1985-06-5")
+    expect(page.locator("input[name='birth_date']")).to_have_value("1985-06-05")
+    ticket = page.locator("input[name='timezone_ticket']")
+    assert resolved_zone(ticket).for_birth_date == date(1985, 6, 5)
+
+
+def test_pressing_calculate_straight_from_the_year_field_sends_a_zone(
+    page, live_server
+):
+    """The year field asks for the zone when the user leaves it, like a
+    coordinate field. Pressing Calculate from it must still post a zone."""
+    posted = []
+    stub_calculate(page, posted)
+    page.goto(live_server)
+    fill_a_calculable_birth(page)
+
+    page.fill("#birth-year", "1986")
+    page.locator("button[type='submit']").click()
+    expect(page.locator("#result")).to_contain_text(STUB_ANSWER)
+    assert len(posted) == 1
+    assert submitted_field(posted[0], "birth_date") == "1986-06-15"
+    assert read_ticket(submitted_ticket(posted[0])).for_birth_date == date(1986, 6, 15)

@@ -157,6 +157,31 @@ class TestFieldFontSize:
         assert min(sizes) >= MIN_FIELD_FONT_PX
 
 
+class TestBirthDateRow:
+    """Day, month and year share one row, even on the narrowest phone."""
+
+    def test_the_three_parts_sit_on_one_row(self, page, live_server):
+        page.goto(live_server)
+        tops = [
+            page.locator(selector).bounding_box()["y"]
+            for selector in ("#birth-day", "#birth-month", "#birth-year")
+        ]
+        assert len(set(tops)) == 1
+
+    def test_the_page_does_not_scroll_sideways_at_320_px(self, page, live_server):
+        page.set_viewport_size({"width": 320, "height": 800})
+        page.goto(live_server)
+        assert page.evaluate(
+            "() => document.documentElement.scrollWidth"
+            " <= document.documentElement.clientWidth"
+        )
+
+    @pytest.mark.parametrize("field", ["#birth-day", "#birth-year"])
+    def test_day_and_year_ask_for_the_number_keypad(self, page, live_server, field):
+        page.goto(live_server)
+        expect(page.locator(field)).to_have_attribute("inputmode", "numeric")
+
+
 class TestPlainTimeField:
     """The birth time field as plain text, which in-app browsers get.
 

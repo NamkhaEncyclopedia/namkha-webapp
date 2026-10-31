@@ -566,6 +566,23 @@ h1.title {
   margin-top: 0.75rem;
 }
 
+/* ---- Birth date: day, month and year in one row ---- */
+.birth-date {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.birth-date legend {
+  padding: 0;
+}
+.birth-date-parts {
+  display: grid;
+  grid-template-columns: 4.5em 1fr 5.5em;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 .additional-checkbox {
   display: inline-flex;
   align-items: center;

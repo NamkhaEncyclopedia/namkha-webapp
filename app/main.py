@@ -524,6 +524,7 @@ async def index(request: Request):
             "namkha_types": constants.NAMKHA_TYPES,
             "methods": constants.METHODS,
             "timezones": constants.TIMEZONES,
+            "birth_years": constants.BIRTH_YEARS,
             "library_version": constants.LIBRARY_VERSION,
             "app_version": constants.APP_VERSION,
             "prerelease_label": constants.PRERELEASE_LABEL,

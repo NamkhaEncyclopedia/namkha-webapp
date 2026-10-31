@@ -50,6 +50,19 @@ def stub_calculate(page, posted, trigger=None, body=None):
     page.route("**/calculate", answer)
 
 
+def fill_birth_date(page, iso_date):
+    """Enter a YYYY-MM-DD birth date into the day, month and year fields.
+
+    page.fill() fires no change event on a text field, so the year field is left
+    by hand. That change starts the time zone lookup, as a user's would.
+    """
+    year, month, day = iso_date.split("-")
+    page.fill("#birth-day", day)
+    page.select_option("#birth-month", month)
+    page.fill("#birth-year", year)
+    page.locator("#birth-year").blur()
+
+
 def fill_a_calculable_birth(page):
     """Enter enough for the form to submit: coordinates, a date and a time.
     Returns once the server has worked the time zone out.
@@ -57,6 +70,6 @@ def fill_a_calculable_birth(page):
     page.get_by_text("Manually set coordinates").click()
     page.fill("#latitude-ui", "52.52")
     page.fill("#longitude-ui", "13.405")
-    page.fill("#birth_date", "1985-06-15")
+    fill_birth_date(page, "1985-06-15")
     page.fill("#birth_time", "12:00")
     resolved_zone(page.locator("input[name='timezone_ticket']"))

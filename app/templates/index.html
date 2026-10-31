@@ -289,15 +289,54 @@
                 </div>
               </div>
               <div>
-                <label for="birth_date" class="label-major">Day of birth:</label>
-                <input type="date"
-                       id="birth_date"
-                       name="birth_date"
-                       class="input-text"
-                       required
-                       x-ref="birthDate"
-                       @input="invalidateTimezone(); invalidateZoneOffsets()"
-                       @change="fetchTimezone(); fetchZoneOffsets()">
+                {# Three plain fields, not a date picker: each browser shows a different picker, #}
+                {# and most make a jump to a distant year slow. #}
+                <fieldset class="birth-date">
+                  <legend class="label-major">Day of birth:</legend>
+                  <div class="birth-date-parts">
+                    <div>
+                      <label for="birth-day">Day</label>
+                      <input type="text"
+                             id="birth-day"
+                             class="input-text"
+                             inputmode="numeric"
+                             maxlength="2"
+                             required
+                             x-model="birthDay"
+                             x-effect="$el.setCustomValidity(birthDayError())"
+                             @input="invalidateTimezone(); invalidateZoneOffsets()"
+                             @change="fetchTimezone(); fetchZoneOffsets()">
+                    </div>
+                    <div>
+                      <label for="birth-month">Month</label>
+                      <select id="birth-month"
+                              class="input-text"
+                              required
+                              x-model="birthMonth"
+                              @input="invalidateTimezone(); invalidateZoneOffsets()"
+                              @change="fetchTimezone(); fetchZoneOffsets()">
+                        <option value="">Month</option>
+                        {% for month_name in ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] %}
+                          <option value="{{ '%02d' % loop.index }}">{{ month_name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div>
+                      <label for="birth-year">Year</label>
+                      <input type="text"
+                             id="birth-year"
+                             class="input-text"
+                             inputmode="numeric"
+                             maxlength="4"
+                             required
+                             x-model="birthYear"
+                             x-effect="$el.setCustomValidity(birthYearError())"
+                             @input="invalidateTimezone(); invalidateZoneOffsets()"
+                             @change="fetchTimezone(); fetchZoneOffsets()">
+                    </div>
+                  </div>
+                  <input type="hidden" name="birth_date" :value="birthDate()">
+                </fieldset>
                 <div class="input-columns">
                   <div>
                     <label for="birth_time" class="label-major">Local birth time:</label>
@@ -547,6 +586,9 @@
 
     const RESULT_STALE_MS = {{ result_stale_ms | tojson }};
 
+    {# First and last birth year the library calculates. #}
+    const [BIRTH_YEAR_MIN, BIRTH_YEAR_MAX] = {{ birth_years | tojson }};
+
     const NETWORK_MESSAGE =
       'Could not reach the server. Check your connection and press Calculate again.';
     const TIMEOUT_MESSAGE =
@@ -755,6 +797,10 @@
         manualCoords: false,
         latitude: '',
         longitude: '',
+        {# The birth date as entered. birthDate() joins the three parts. #}
+        birthDay: '',
+        birthMonth: '',
+        birthYear: '',
         timezoneMode: 'auto',
         {# The zone key, used to prefill the picker when the user switches to it. #}
         detectedTimezone: '',
@@ -1005,9 +1051,9 @@
           const requestId = this.timezoneRequestId;
           {# The birth date decides which time zone applied, and the birth time #}
           {# decides how it reads, so neither can be left out. Read both now: #}
-          {# $refs is only reachable while the change that called this is still #}
-          {# being handled, and the wait below ends that. #}
-          const birthDate = this.$refs.birthDate?.value;
+          {# $refs, which holds the time field, is only reachable while the change #}
+          {# that called this is still being handled, and the wait below ends that. #}
+          const birthDate = this.birthDate();
           const birthTime = this.$refs.birthTime?.value;
           {# Wait before asking. Changing the mode or the offset touches several #}
           {# fields in a row, and this way that sends one request instead of #}
@@ -1176,7 +1222,7 @@
         {# does not change any zone's offset. #}
         async fetchZoneOffsets() {
           if (this.timezoneMode !== 'list') return;
-          const birthDate = this.$refs.birthDate?.value;
+          const birthDate = this.birthDate();
           const birthTime = this.$refs.birthTime?.value;
           if (!birthDate || !birthTime) return;
           this.zoneOffsetsRequestId += 1;
@@ -1252,6 +1298,38 @@
           return match !== null && Number(match[1]) * 60 + Number(match[2]) > 16 * 60;
         },
 
+        {# The birth date as the server reads it, YYYY-MM-DD, or '' while the #}
+        {# three parts do not make a date. #}
+        birthDate() {
+          if (!this.birthDay || !this.birthMonth || !this.birthYear) return '';
+          if (this.birthDayError() || this.birthYearError()) return '';
+          return `${this.birthYear}-${this.birthMonth}-${this.birthDay.padStart(2, '0')}`;
+        },
+
+        {# The empty field gets the browser's own "required" message instead. #}
+        birthYearError() {
+          if (this.birthYear === '') return '';
+          if (!/^\d{4}$/.test(this.birthYear)) return 'Enter the year with four digits, like 1985.';
+          const year = Number(this.birthYear);
+          if (year < BIRTH_YEAR_MIN || year > BIRTH_YEAR_MAX) {
+            return `Enter a year from ${BIRTH_YEAR_MIN} to ${BIRTH_YEAR_MAX}.`;
+          }
+          return '';
+        },
+
+        birthDayError() {
+          if (this.birthDay === '') return '';
+          const day = Number(this.birthDay);
+          if (!/^\d{1,2}$/.test(this.birthDay) || day < 1 || day > 31) return 'Enter a day from 1 to 31.';
+          if (!this.birthMonth || !/^\d{4}$/.test(this.birthYear)) return '';
+          const month = Number(this.birthMonth);
+          {# Date.UTC counts on the Gregorian calendar before 1582 too, as the #}
+          {# server's datetime does. A day the month lacks, such as 31 April or #}
+          {# 29 February 1700, rolls into the next month. #}
+          const date = new Date(Date.UTC(Number(this.birthYear), month - 1, day));
+          return date.getUTCMonth() === month - 1 ? '' : 'This month has no such day.';
+        },
+
         {# Put the plain field into HH:MM shape on change: "930", "0930" and #}
         {# "9:30" all become "09:30". The server reads the birth time as HH:MM #}
         {# and refuses the other three, and so does the field's own pattern. The #}
@@ -1270,7 +1348,6 @@
           Object.assign(this, initialFormState());
           {# Native-only fields (no x-model) – clear by hand. #}
           this.$refs.name.value = '';
-          this.$refs.birthDate.value = '';
           this.$refs.birthTime.value = '';
           document.getElementById('result').innerHTML = document.getElementById('result-placeholder').innerHTML;
         },
@@ -1281,6 +1358,7 @@
         applyFixture(data) {
           {# Start from the defaults, then override only what the fixture sets, #}
           {# so a field added to the form can't be left stale here. #}
+          const [birthYear, birthMonth, birthDay] = data.birth_date.split('-');
           Object.assign(this, initialFormState(), {
             method: data.method,
             namkhaType: data.namkha_type,
@@ -1289,6 +1367,9 @@
             manualCoords: true,
             latitude: data.latitude,
             longitude: data.longitude,
+            birthDay,
+            birthMonth,
+            birthYear,
             timezoneMode: data.utc_offset ? 'offset' : (data.timezone ? 'list' : 'auto'),
             timezone: data.timezone || '',
             utcOffsetSign: data.utc_offset ? data.utc_offset[0] : '+',
@@ -1296,7 +1377,6 @@
             onSummerTime: data.on_summer_time || '',
           });
           this.$refs.name.value = data.name || '';
-          this.$refs.birthDate.value = data.birth_date;
           this.$refs.birthTime.value = data.birth_time;
           {# Fixtures carry no resolved zone: it would be stale the moment the #}
           {# file was written. Ask for one now, as the form is complete. Setting #}

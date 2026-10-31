@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import namkha_calculator as nc
+from namkha_calculator.calendar import supported_year_range
 
 # Versions surfaced in the UI as flat badges, computed once at import.
 # Library: same call the sheet render uses, so page and sheet never disagree.
@@ -160,3 +161,7 @@ def zone_offsets_at(birth_datetime: datetime) -> dict[str, str]:
 # The same keys, for checking one that arrives on a request. Built from
 # TIMEZONES so the picker and the check cannot come apart.
 ZONE_KEYS = frozenset(zone_name for zone_name, _ in TIMEZONES)
+
+# First and last birth year the library calculates. The birth date field
+# refuses a year outside them.
+BIRTH_YEARS = supported_year_range()
