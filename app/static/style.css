@@ -492,6 +492,12 @@ h1.title {
   background: var(--input-disabled-bg);
   color: var(--gray-600);
 }
+/* iOS zooms the page into any field under 16px when it gets focus. */
+@media (max-width: 640px) {
+  .input-text {
+    font-size: 1rem;
+  }
+}
 
 /* ---- Radio toggle group ---- */
 .radio-toggle {

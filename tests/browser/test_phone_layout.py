@@ -139,6 +139,24 @@ class TestTapTargets:
         assert box["width"] >= MIN_TAP_TARGET_PX
 
 
+# iOS zooms the page into a field with smaller text when it gets focus.
+MIN_FIELD_FONT_PX = 16
+
+
+class TestFieldFontSize:
+    """Playwright WebKit does not zoom on focus, so these tests check the font size."""
+
+    def test_every_visible_field_is_large_enough_to_stop_the_zoom(
+        self, page, live_server
+    ):
+        page.goto(live_server)
+        sizes = page.locator(".input-text:visible").evaluate_all(
+            "fields => fields.map(f => parseFloat(getComputedStyle(f).fontSize))"
+        )
+        assert sizes
+        assert min(sizes) >= MIN_FIELD_FONT_PX
+
+
 class TestPlainTimeField:
     """The birth time field as plain text, which in-app browsers get.
 
