@@ -5,7 +5,7 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) versioning.
 
-## [Unreleased]
+## [0.1.0a6] – 2026-10-31
 
 ### Added
 
@@ -139,6 +139,7 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 Initial alpha release: web form for Namkha calculation, rendering a typeset sheet
 with an inline thread-cross illustration and a downloadable PDF.
 
+[0.1.0a6]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a5...v0.1.0a6
 [0.1.0a5]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a4...v0.1.0a5
 [0.1.0a4]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a3...v0.1.0a4
 [0.1.0a3]: https://github.com/NamkhaEncyclopedia/namkha-webapp/compare/v0.1.0a2...v0.1.0a3
