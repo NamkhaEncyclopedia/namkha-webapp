@@ -15,11 +15,21 @@ and this project adheres to [PEP 440](https://peps.python.org/pep-0440/) version
 ### Changed
 
 - The Download PDF button is taller, so it is easier to tap on a phone.
+- The birth date is three fields: day, month and year. The year is typed, so a
+  distant year takes four key presses. Each browser showed a different date
+  picker before, and most made a jump to a distant year slow.
+- The form groups the birth date and the birth time under the headings "Date of
+  birth" and "Time of birth", with a thin line above each. In that group, the
+  birth time field has the label "Local time".
 
 ### Fixed
 
 - "Choose from list" opens on the detected time zone in every browser. In some
   browsers the list stayed at the top when the zone offsets arrived quickly.
+- An iPhone no longer zooms into a form field when you tap it. The fields on a
+  phone use 16 px text, the smallest size that iOS does not zoom on.
+- A space pasted into the day or year field no longer blocks the form.
+- Browser autofill can fill the birth date fields.
 
 ## [0.1.0a5] – 2026-09-10
 
