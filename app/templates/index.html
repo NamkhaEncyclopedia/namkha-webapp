@@ -244,7 +244,7 @@
                    x-cloak>No places found.</p>
                 <div class="input-columns">
                   <div>
-                    <label for="latitude-ui">Latitude:</label>
+                    <label for="latitude-ui" class="label-minor">Latitude</label>
                     <input type="number"
                            step="any"
                            min="-90"
@@ -258,7 +258,7 @@
                     <input type="hidden" name="latitude" :value="latitude">
                   </div>
                   <div>
-                    <label for="longitude-ui">Longitude:</label>
+                    <label for="longitude-ui" class="label-minor">Longitude</label>
                     <input type="number"
                            step="any"
                            min="-180"
@@ -288,14 +288,14 @@
                   </span>
                 </div>
               </div>
-              <div>
+              <div class="form-divider">
                 {# Three plain fields, not a date picker: each browser shows a different picker, #}
                 {# and most make a jump to a distant year slow. #}
-                <fieldset class="birth-date">
-                  <legend class="label-major">Day of birth:</legend>
+                <fieldset class="field-group">
+                  <legend class="label-major">Date of birth:</legend>
                   <div class="birth-date-parts">
                     <div>
-                      <label for="birth-day">Day</label>
+                      <label for="birth-day" class="label-minor">Day</label>
                       <input type="text"
                              id="birth-day"
                              class="input-text"
@@ -308,7 +308,7 @@
                              @change="fetchTimezone(); fetchZoneOffsets()">
                     </div>
                     <div>
-                      <label for="birth-month">Month</label>
+                      <label for="birth-month" class="label-minor">Month</label>
                       <select id="birth-month"
                               class="input-text"
                               required
@@ -322,7 +322,7 @@
                       </select>
                     </div>
                     <div>
-                      <label for="birth-year">Year</label>
+                      <label for="birth-year" class="label-minor">Year</label>
                       <input type="text"
                              id="birth-year"
                              class="input-text"
@@ -337,176 +337,181 @@
                   </div>
                   <input type="hidden" name="birth_date" :value="birthDate()">
                 </fieldset>
-                <div class="input-columns">
-                  <div>
-                    <label for="birth_time" class="label-major">Local birth time:</label>
-                    {# Time picker as plain text option is added to prevent Instagram internal browser from crashing (see wantsPlainTimeInput() for details). #}
-                    <input type="text"
-                           :type="plainTimeInput ? 'text' : 'time'"
-                           id="birth_time"
-                           name="birth_time"
-                           class="input-text"
-                           required
-                           x-ref="birthTime"
-                           :inputmode="plainTimeInput ? 'numeric' : null"
-                           :placeholder="plainTimeInput ? 'HH:MM' : null"
-                           :pattern="plainTimeInput ? '([01][0-9]|2[0-3]):[0-5][0-9]' : null"
-                           :title="plainTimeInput ? 'Hours and minutes on a 24-hour clock, like 09:30 or 0930' : null"
-                           @input="invalidateTimezone(); invalidateZoneOffsets()"
-                           @change="padTimeText(); fetchTimezone(); fetchZoneOffsets()">
+              </div>
+              <div class="form-divider">
+                <fieldset class="field-group">
+                  <legend class="label-major">Time of birth:</legend>
+                  <div class="input-columns">
+                    <div>
+                      <label for="birth_time" class="label-minor">Local time</label>
+                      {# Time picker as plain text option is added to prevent Instagram internal browser from crashing (see wantsPlainTimeInput() for details). #}
+                      <input type="text"
+                             :type="plainTimeInput ? 'text' : 'time'"
+                             id="birth_time"
+                             name="birth_time"
+                             class="input-text"
+                             required
+                             x-ref="birthTime"
+                             :inputmode="plainTimeInput ? 'numeric' : null"
+                             :placeholder="plainTimeInput ? 'HH:MM' : null"
+                             :pattern="plainTimeInput ? '([01][0-9]|2[0-3]):[0-5][0-9]' : null"
+                             :title="plainTimeInput ? 'Hours and minutes on a 24-hour clock, like 09:30 or 0930' : null"
+                             @input="invalidateTimezone(); invalidateZoneOffsets()"
+                             @change="padTimeText(); fetchTimezone(); fetchZoneOffsets()">
+                    </div>
+                    <div>
+                      <label for="timezone-mode" class="label-minor">Time zone</label>
+                      <span class="help-tip">
+                        <button type="button"
+                                class="help-trigger"
+                                aria-label="Help"
+                                aria-describedby="tip-timezone"
+                                @mouseenter="positionTip($event)"
+                                @focus="positionTip($event)">?</button>
+                        <span role="tooltip" id="tip-timezone" class="help-text">By default the time zone (including summer time) is determined from the birth place and date, even for historical dates; the sheet notes any uncertainty. Pick a zone or enter a UTC offset only if you are certain the clock at birth followed it.</span>
+                      </span>
+                      <select id="timezone-mode" class="input-text" x-model="timezoneMode">
+                        <option value="auto">Automatic</option>
+                        <option value="list">Choose from list</option>
+                        <option value="offset">UTC offset</option>
+                      </select>
+                      {# Automatic mode submits neither field; the library derives the zone from birth place and date. #}
+                      <input type="hidden"
+                             name="timezone"
+                             :value="timezoneMode === 'list' ? timezone : ''">
+                      <input type="hidden"
+                             name="utc_offset"
+                             :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
+                      {# The ticket /timezone gave for the zone it kept. Empty
+                         until a lookup succeeds, and an empty one is refused on
+                         submit: the calculation takes its zone from the store
+                         this ticket points into, and never works one out for
+                         itself. #}
+                      <input type="hidden" name="timezone_ticket" :value="timezoneTicket">
+                    </div>
                   </div>
-                  <div>
-                    <label for="timezone-mode">Birth time zone:</label>
+                  <template x-if="timezoneMode === 'auto'">
+                    <p class="timezone-detected"
+                       role="status"
+                       x-text="timezoneLabel ? 'Detected: ' + timezoneLabel : 'Determined from the birth place and date.'">
+                    </p>
+                  </template>
+                  <template x-if="timezoneMode === 'list'">
+                    <div class="timezone-search">
+                      <label for="timezone-search" class="sr-only">Search time zones</label>
+                      <input type="text"
+                             id="timezone-search"
+                             class="input-text"
+                             autocomplete="off"
+                             placeholder="Search time zones"
+                             role="combobox"
+                             aria-controls="timezone-listbox"
+                             aria-autocomplete="list"
+                             aria-expanded="true"
+                             :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
+                             x-model="timezoneQuery"
+                             x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
+                             @input="searchTimezones()"
+                             @keydown="onTimezoneKeydown($event)"
+                             @blur="commitTimezoneOnBlur()">
+                      {# The list stays on screen for as long as this mode is
+                         chosen. The search field narrows it in place; it never
+                         opens or closes. #}
+                      <ul class="timezone-list"
+                          id="timezone-listbox"
+                          role="listbox"
+                          aria-label="Time zones"
+                          x-ref="timezoneList">
+                        {# timezoneRows holds headings and zones. A row with a
+                           region is a heading; every other row is a zone.
+                           Screen readers skip the headings, because each zone
+                           key already starts with its region. #}
+                        <template x-for="row in timezoneRows" :key="row.key">
+                          <li :class="row.region ? 'timezone-group' : { 'timezone-suggestion': true, 'is-active': row.index === timezoneActiveIndex, 'is-selected': row.key === timezone, }"
+                              :role="row.region ? 'presentation' : 'option'"
+                              :aria-hidden="row.region ? 'true' : null"
+                              :id="row.region ? null : 'timezone-option-' + row.index"
+                              :aria-selected="row.region ? null : row.key === timezone"
+                              @mousedown.prevent="if (!row.region) selectTimezone(row)"
+                              x-text="row.region || row.label"></li>
+                        </template>
+                        <li class="timezone-empty"
+                            x-show="!timezoneRows.length"
+                            x-text="'No time zone matches “' + timezoneQuery.trim() + '”.'"></li>
+                      </ul>
+                    </div>
+                  </template>
+                  <template x-if="timezoneMode === 'offset'">
+                    <div class="utc-offset-field">
+                      <span class="utc-offset-prefix" aria-hidden="true">UTC</span>
+                      <label for="utc-offset-sign" class="sr-only">Offset direction</label>
+                      <select id="utc-offset-sign"
+                              class="input-text utc-offset-sign"
+                              x-model="utcOffsetSign"
+                              @change="fetchTimezone()">
+                        <option value="+">+</option>
+                        <option value="-">-</option>
+                      </select>
+                      <label for="utc-offset-time" class="sr-only">Offset hours and minutes</label>
+                      <input type="text"
+                             id="utc-offset-time"
+                             class="input-text utc-offset-time"
+                             inputmode="numeric"
+                             placeholder="5:45"
+                             required
+                             pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
+                             title="Hours 0 to 16, with optional minutes, like 5:45"
+                             x-model="utcOffsetTime"
+                             @input="invalidateTimezone()"
+                             @change="fetchTimezone()"
+                             x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')">
+                    </div>
+                  </template>
+                  <div class="summer-time-field" x-show="timezoneMode !== 'offset'">
+                    <label for="on_summer_time" class="label-minor">Summer time (DST)</label>
                     <span class="help-tip">
                       <button type="button"
                               class="help-trigger"
                               aria-label="Help"
-                              aria-describedby="tip-timezone"
+                              aria-describedby="tip-summer-time"
                               @mouseenter="positionTip($event)"
                               @focus="positionTip($event)">?</button>
-                      <span role="tooltip" id="tip-timezone" class="help-text">By default the time zone (including summer time) is determined from the birth place and date, even for historical dates; the sheet notes any uncertainty. Pick a zone or enter a UTC offset only if you are certain the clock at birth followed it.</span>
+                      <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
                     </span>
-                    <select id="timezone-mode" class="input-text" x-model="timezoneMode">
-                      <option value="auto">Automatic</option>
-                      <option value="list">Choose from list</option>
-                      <option value="offset">UTC offset</option>
+                    {# A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. #}
+                    <select id="on_summer_time"
+                            name="on_summer_time"
+                            class="input-text"
+                            x-model="onSummerTime"
+                            @change="fetchTimezone()"
+                            :disabled="timezoneMode === 'offset'">
+                      <option value="">Not sure</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
                     </select>
-                    {# Automatic mode submits neither field; the library derives the zone from birth place and date. #}
-                    <input type="hidden"
-                           name="timezone"
-                           :value="timezoneMode === 'list' ? timezone : ''">
-                    <input type="hidden"
-                           name="utc_offset"
-                           :value="timezoneMode === 'offset' ? utcOffsetSign + utcOffsetTime : ''">
-                    {# The ticket /timezone gave for the zone it kept. Empty
-                       until a lookup succeeds, and an empty one is refused on
-                       submit: the calculation takes its zone from the store
-                       this ticket points into, and never works one out for
-                       itself. #}
-                    <input type="hidden" name="timezone_ticket" :value="timezoneTicket">
                   </div>
-                </div>
-                <template x-if="timezoneMode === 'auto'">
-                  <p class="timezone-detected"
-                     role="status"
-                     x-text="timezoneLabel ? 'Detected: ' + timezoneLabel : 'Determined from the birth place and date.'">
-                  </p>
-                </template>
-                <template x-if="timezoneMode === 'list'">
-                  <div class="timezone-search">
-                    <label for="timezone-search" class="sr-only">Search time zones</label>
-                    <input type="text"
-                           id="timezone-search"
-                           class="input-text"
-                           autocomplete="off"
-                           placeholder="Search time zones"
-                           role="combobox"
-                           aria-controls="timezone-listbox"
-                           aria-autocomplete="list"
-                           aria-expanded="true"
-                           :aria-activedescendant="timezoneActiveIndex >= 0 ? 'timezone-option-' + timezoneActiveIndex : null"
-                           x-model="timezoneQuery"
-                           x-effect="$el.setCustomValidity(timezone ? '' : 'Choose a time zone from the list.')"
-                           @input="searchTimezones()"
-                           @keydown="onTimezoneKeydown($event)"
-                           @blur="commitTimezoneOnBlur()">
-                    {# The list stays on screen for as long as this mode is
-                       chosen. The search field narrows it in place; it never
-                       opens or closes. #}
-                    <ul class="timezone-list"
-                        id="timezone-listbox"
-                        role="listbox"
-                        aria-label="Time zones"
-                        x-ref="timezoneList">
-                      {# timezoneRows holds headings and zones. A row with a
-                         region is a heading; every other row is a zone.
-                         Screen readers skip the headings, because each zone
-                         key already starts with its region. #}
-                      <template x-for="row in timezoneRows" :key="row.key">
-                        <li :class="row.region ? 'timezone-group' : { 'timezone-suggestion': true, 'is-active': row.index === timezoneActiveIndex, 'is-selected': row.key === timezone, }"
-                            :role="row.region ? 'presentation' : 'option'"
-                            :aria-hidden="row.region ? 'true' : null"
-                            :id="row.region ? null : 'timezone-option-' + row.index"
-                            :aria-selected="row.region ? null : row.key === timezone"
-                            @mousedown.prevent="if (!row.region) selectTimezone(row)"
-                            x-text="row.region || row.label"></li>
+                  {# What the entered details already imply, shown before the
+                     calculation runs. Notes that need the finished result, such
+                     as a birth time next to a period boundary, appear on the
+                     sheet only. #}
+                  <template x-if="timezoneNotes.length">
+                    <ul class="input-notes" role="status" x-cloak>
+                      <template x-for="note in timezoneNotes" :key="note.message">
+                        <li class="input-note"
+                            :class="'input-note--' + note.kind"
+                            x-text="note.message"></li>
                       </template>
-                      <li class="timezone-empty"
-                          x-show="!timezoneRows.length"
-                          x-text="'No time zone matches “' + timezoneQuery.trim() + '”.'"></li>
                     </ul>
+                  </template>
+                  <div class="inline-tooltip"
+                       role="alert"
+                       x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)"
+                       x-cloak>
+                    <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
+                    with a precision of at least 10 minutes. Please do a western astrology birth chart
+                    rectification if you are unsure.
                   </div>
-                </template>
-                <template x-if="timezoneMode === 'offset'">
-                  <div class="utc-offset-field">
-                    <span class="utc-offset-prefix" aria-hidden="true">UTC</span>
-                    <label for="utc-offset-sign" class="sr-only">Offset direction</label>
-                    <select id="utc-offset-sign"
-                            class="input-text utc-offset-sign"
-                            x-model="utcOffsetSign"
-                            @change="fetchTimezone()">
-                      <option value="+">+</option>
-                      <option value="-">-</option>
-                    </select>
-                    <label for="utc-offset-time" class="sr-only">Offset hours and minutes</label>
-                    <input type="text"
-                           id="utc-offset-time"
-                           class="input-text utc-offset-time"
-                           inputmode="numeric"
-                           placeholder="5:45"
-                           required
-                           pattern="(1[0-6]|[0-9])(:[0-5][0-9])?"
-                           title="Hours 0 to 16, with optional minutes, like 5:45"
-                           x-model="utcOffsetTime"
-                           @input="invalidateTimezone()"
-                           @change="fetchTimezone()"
-                           x-effect="$el.setCustomValidity(utcOffsetExceedsRange() ? 'UTC offset must be between -16:00 and +16:00.' : '')">
-                  </div>
-                </template>
-                <div class="summer-time-field" x-show="timezoneMode !== 'offset'">
-                  <label for="on_summer_time">Summer time (DST) at birth:</label>
-                  <span class="help-tip">
-                    <button type="button"
-                            class="help-trigger"
-                            aria-label="Help"
-                            aria-describedby="tip-summer-time"
-                            @mouseenter="positionTip($event)"
-                            @focus="positionTip($event)">?</button>
-                    <span role="tooltip" id="tip-summer-time" class="help-text">Only matters if the birth time falls in the hour that repeats when clocks are set back at the end of summer time. Choose Yes or No if you know what the clock showed; otherwise leave “Not sure”.</span>
-                  </span>
-                  {# A fixed UTC offset has no DST: the field hides and, disabled, is not submitted. #}
-                  <select id="on_summer_time"
-                          name="on_summer_time"
-                          class="input-text"
-                          x-model="onSummerTime"
-                          @change="fetchTimezone()"
-                          :disabled="timezoneMode === 'offset'">
-                    <option value="">Not sure</option>
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-                {# What the entered details already imply, shown before the
-                   calculation runs. Notes that need the finished result, such
-                   as a birth time next to a period boundary, appear on the
-                   sheet only. #}
-                <template x-if="timezoneNotes.length">
-                  <ul class="input-notes" role="status" x-cloak>
-                    <template x-for="note in timezoneNotes" :key="note.message">
-                      <li class="input-note"
-                          :class="'input-note--' + note.kind"
-                          x-text="note.message"></li>
-                    </template>
-                  </ul>
-                </template>
-                <div class="inline-tooltip"
-                     role="alert"
-                     x-show="['MONTH', 'DAY', 'HOUR'].includes(namkhaType)"
-                     x-cloak>
-                  <strong>WARNING:</strong> For this type of Namkha you need to know your birth time
-                  with a precision of at least 10 minutes. Please do a western astrology birth chart
-                  rectification if you are unsure.
-                </div>
+                </fieldset>
               </div>
             </div>
             <div class="form-mains form-actions">
