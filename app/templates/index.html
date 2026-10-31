@@ -301,8 +301,9 @@
                              class="input-text"
                              inputmode="numeric"
                              maxlength="2"
+                             autocomplete="bday-day"
                              required
-                             x-model="birthDay"
+                             x-model.trim="birthDay"
                              x-effect="$el.setCustomValidity(birthDayError())"
                              @input="invalidateTimezone(); invalidateZoneOffsets()"
                              @change="fetchTimezone(); fetchZoneOffsets()">
@@ -311,6 +312,7 @@
                       <label for="birth-month" class="label-minor">Month</label>
                       <select id="birth-month"
                               class="input-text"
+                              autocomplete="bday-month"
                               required
                               x-model="birthMonth"
                               @input="invalidateTimezone(); invalidateZoneOffsets()"
@@ -328,8 +330,9 @@
                              class="input-text"
                              inputmode="numeric"
                              maxlength="4"
+                             autocomplete="bday-year"
                              required
-                             x-model="birthYear"
+                             x-model.trim="birthYear"
                              x-effect="$el.setCustomValidity(birthYearError())"
                              @input="invalidateTimezone(); invalidateZoneOffsets()"
                              @change="fetchTimezone(); fetchZoneOffsets()">

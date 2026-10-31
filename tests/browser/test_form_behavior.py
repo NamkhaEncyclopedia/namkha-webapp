@@ -780,6 +780,14 @@ def test_a_one_digit_day_reaches_the_server_padded(page, live_server):
     assert resolved_zone(ticket).for_birth_date == date(1985, 6, 5)
 
 
+def test_a_pasted_space_before_the_day_is_ignored(page, live_server):
+    """A paste or an autofill can bring a space with the number."""
+    page.goto(live_server)
+    fill_birth_date(page, "1985-06- 5")
+    expect(page.locator("input[name='birth_date']")).to_have_value("1985-06-05")
+    assert page.locator("#birth-day").evaluate("el => el.validationMessage") == ""
+
+
 def test_pressing_calculate_straight_from_the_year_field_sends_a_zone(
     page, live_server
 ):
